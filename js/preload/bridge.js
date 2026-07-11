@@ -15,11 +15,29 @@ var ontaskBridge = {
     return url.href
   },
 
+  // what the user is looking at right now: the search query if this is a
+  // results page, else the page title — lets the engine judge items in
+  // context instead of in a vacuum
+  pageContext: function () {
+    try {
+      var url = new URL(window.location.href)
+      var params = ['q', 'query', 'search_query', 'p', 's', 'k']
+      for (var i = 0; i < params.length; i++) {
+        var value = url.searchParams.get(params[i])
+        if (value && value.trim()) {
+          return value.replace(/\s+/g, ' ').trim().slice(0, 200)
+        }
+      }
+    } catch (e) {}
+    return (document.title || '').replace(/\s+/g, ' ').trim().slice(0, 200)
+  },
+
   sendCards: function (items) {
     for (var i = 0; i < items.length; i += 50) {
       try {
         ipc.send('ontask-cards-collected', {
           url: ontaskBridge.currentURL(),
+          context: ontaskBridge.pageContext(),
           items: items.slice(i, i + 50)
         })
       } catch (e) {

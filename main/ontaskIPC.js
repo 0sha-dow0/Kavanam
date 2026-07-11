@@ -133,7 +133,15 @@ const ontaskIPC = {
     if (Buffer.byteLength(JSON.stringify(items), 'utf8') > 32768) {
       ontaskIPC.reject()
     }
-    return { sender: content.sender, url: content.url, items: items }
+    var context = null
+    if (typeof payload.context === 'string') {
+      try {
+        context = ontaskIPC.cleanText(payload.context, 200, 1)
+      } catch (e) {
+        context = null // context is advisory: a bad one is just ignored
+      }
+    }
+    return { sender: content.sender, url: content.url, items: items, context: context }
   },
 
   take: function (event, bucket, limit, windowMs) {

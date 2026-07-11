@@ -198,11 +198,30 @@ const ontaskRelevanceEngine = {
   show | hide | pending. Ambiguous items return 'pending' (fail closed, Q8)
   and resolve later through onUpdate([{id, verdict}]).
   */
-  scoreItems: async function (items, onUpdate, pageURL) {
+  HARD_OFF: 0.28, // below this an item is unambiguously unrelated
+
+  scoreItems: async function (items, onUpdate, pageURL, pageContext) {
     var results = []
     var ambiguous = []
     var session = focusSession.get()
     var overrides = session && Array.isArray(session.overrides) ? session.overrides : []
+
+    /*
+    Context-aware banding: when the page the user is on is itself on-task
+    (an approved search, an on-task article), items there deserve the
+    benefit of the doubt — snippets embed noisily ("Try free templates")
+    even when the destination is exactly what the task needs. On such
+    pages the local tier only hides unambiguous junk; everything mid-band
+    is judged by Groq WITH the page context.
+    */
+    var lenientOffBar = ontaskRelevanceEngine.bands.off
+    if (pageContext) {
+      var contextScore = await ontaskRelevanceEngine.scoreText(pageContext, { taskOnly: true })
+      if (contextScore !== null && contextScore >= ontaskRelevanceEngine.bands.on) {
+        lenientOffBar = ontaskRelevanceEngine.HARD_OFF
+      }
+    }
+
     for (var i = 0; i < items.length; i++) {
       var item = items[i]
       var overridden = overrides.some(function (record) {
@@ -225,17 +244,19 @@ const ontaskRelevanceEngine = {
       } else if (band === 'on') {
         ontaskRelevanceEngine.verdictCache[cacheKey] = 'show'
         results.push({ id: item.id, verdict: 'show' })
-      } else if (band === 'off') {
+      } else if (band === 'off' && score < lenientOffBar) {
         ontaskRelevanceEngine.verdictCache[cacheKey] = 'hide'
         results.push({ id: item.id, verdict: 'hide' })
       } else {
+        // mid-band (including off-band items on an on-task page): withhold
+        // and let Groq judge with context (Q8)
         results.push({ id: item.id, verdict: 'pending' })
         ambiguous.push(item)
       }
     }
     if (ambiguous.length) {
       // one batched Groq call per chunk — never one request per item
-      ontaskRelevanceEngine.tiebreakBatchLater(ambiguous, onUpdate)
+      ontaskRelevanceEngine.tiebreakBatchLater(ambiguous, onUpdate, pageContext)
     }
     return results
   },
@@ -243,7 +264,7 @@ const ontaskRelevanceEngine = {
   TIEBREAK_CHUNK: 20,
   TIEBREAK_TIMEOUT: 15000,
 
-  tiebreakBatchLater: function (items, onUpdate) {
+  tiebreakBatchLater: function (items, onUpdate, pageContext) {
     var session = focusSession.get()
     var task = ontaskRelevanceEngine.taskText
     var revision = ontaskRelevanceEngine.revision
@@ -262,7 +283,7 @@ const ontaskRelevanceEngine = {
           }, ontaskRelevanceEngine.TIEBREAK_TIMEOUT)
         })
         Promise.race([
-          ontaskGroqClient.tiebreakBatch(task, session ? session.expandedIntent : '', chunk),
+          ontaskGroqClient.tiebreakBatch(task, session ? session.expandedIntent : '', chunk, pageContext),
           timeout
         ]).then(function (judged) {
           if (revision !== ontaskRelevanceEngine.revision || focusSession.get() !== session) {
@@ -364,6 +385,7 @@ ipc.on('ontask-cards-collected', function (e, payload) {
   var sender = cleaned.sender
   var items = cleaned.items
   var pageURL = cleaned.url
+  var pageContext = cleaned.context
   var requestRevision = ontaskRelevanceEngine.revision
   if (!items.length) {
     return
@@ -388,7 +410,7 @@ ipc.on('ontask-cards-collected', function (e, payload) {
         if (!ontaskRelevanceEngine.enforcing()) {
           return
         }
-        ontaskRelevanceEngine.scoreItems(items, push, pageURL).then(push).catch(function () {
+        ontaskRelevanceEngine.scoreItems(items, push, pageURL, pageContext).then(push).catch(function () {
           push(items.map(function (it) { return { id: it.id, verdict: 'show' } }))
         })
       })
@@ -396,7 +418,7 @@ ipc.on('ontask-cards-collected', function (e, payload) {
     return
   }
 
-  ontaskRelevanceEngine.scoreItems(items, push, pageURL).then(push).catch(function () {
+  ontaskRelevanceEngine.scoreItems(items, push, pageURL, pageContext).then(push).catch(function () {
     push(items.map(function (it) { return { id: it.id, verdict: 'show' } }))
   })
 })

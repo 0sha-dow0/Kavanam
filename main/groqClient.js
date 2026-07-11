@@ -165,14 +165,18 @@ const ontaskGroqClient = {
 
   // batched ambiguity tiebreaker: one call judges a whole chunk of items,
   // instead of one request per item (which floods the API on wide feeds)
-  tiebreakBatch: async function (task, intent, items) {
+  tiebreakBatch: async function (task, intent, items, pageContext) {
     var numbered = items.map(function (item, i) {
       return (i + 1) + '. ' + String(item.text).slice(0, 200)
     }).join('\n')
     var content = await ontaskGroqClient.complete(
       'You judge whether content items are relevant to the user\'s current task. ' +
+      'Mark "on" anything plausibly useful for the task — tools, services, guides, and results count even when their snippet reads like marketing. ' +
+      'Mark "off" only content clearly unrelated to the task. ' +
       'Respond with JSON only: {"verdicts": ["on" or "off", ...]} — exactly one entry per numbered item, in order.',
-      'Task: ' + task + (intent ? '\nTask intent: ' + intent : '') + '\nItems:\n' + numbered,
+      'Task: ' + task + (intent ? '\nTask intent: ' + intent : '') +
+      (pageContext ? '\nThe user is currently viewing: ' + pageContext : '') +
+      '\nItems:\n' + numbered,
       true
     )
     var parsed = JSON.parse(content)
