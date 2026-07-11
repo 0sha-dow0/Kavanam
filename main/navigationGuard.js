@@ -171,7 +171,10 @@ const ontaskNavigationGuard = {
       return { allow: true, reason: 'unparseable' }
     }
 
-    // search engines: the QUERY is the intent — judge it directly
+    // search engines: the QUERY is the intent — judge it, but navigational
+    // queries (typing a site name to reach it) must always pass. The local
+    // embedding can't tell "google" from "cheesecake", so Groq decides;
+    // locally we only block multi-word queries that score clearly off.
     var isSearchHost = g.SEARCH_HOSTS.some(function (h) { return g.hostMatches(target.hostname, h) })
     var text
     var offReason
@@ -180,8 +183,23 @@ const ontaskNavigationGuard = {
       if (!query || query.length < 6) {
         return { allow: true, reason: 'search' }
       }
-      text = query
-      offReason = 'off-task search'
+      var queryScore = await ontaskRelevanceEngine.scoreText(query, { taskOnly: true })
+      var queryBand = ontaskRelevanceEngine.band(queryScore)
+      if (queryBand === 'on' || queryBand === null) {
+        return { allow: true, reason: 'search on-task' }
+      }
+      if (ontaskGroqClient.available()) {
+        var session1 = focusSession.get()
+        var searchVerdict = await ontaskGroqClient.judgeSearch(session1.task, session1.expandedIntent, query)
+        return searchVerdict === 'allow'
+          ? { allow: true, reason: 'search allowed (groq)' }
+          : { allow: false, reason: 'off-task search' }
+      }
+      // degraded: never block short/one-word queries on embeddings alone
+      if (queryBand === 'off' && query.split(' ').length >= 3) {
+        return { allow: false, reason: 'off-task search' }
+      }
+      return { allow: true, reason: 'search (degraded)' }
     } else {
       // a bare domain, repeated-domain path, or URL machinery carries no
       // task signal ("youtube com youtube" from a typed 'youtube'): let it

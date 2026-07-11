@@ -147,6 +147,22 @@ const ontaskGroqClient = {
     }
   },
 
+  /* search-query judgment: navigational queries (reaching a site) always
+     pass; only content searches clearly unrelated to the task block */
+  judgeSearch: async function (task, intent, query) {
+    var content = await ontaskGroqClient.complete(
+      'A user typed a web search during a focus session. Decide if it should be allowed. ' +
+      'ALLOW navigational queries (trying to reach a specific website, app, or tool — e.g. "google", "youtube", "gmail login"). ' +
+      'ALLOW content searches related to the task. ' +
+      'BLOCK only content searches clearly unrelated to the task. ' +
+      'Respond with JSON only: {"verdict": "allow"} or {"verdict": "block"}.',
+      'Task: ' + task + (intent ? '\nTask intent: ' + intent : '') + '\nSearch query: ' + query,
+      true
+    )
+    var parsed = JSON.parse(content)
+    return parsed.verdict === 'block' ? 'block' : 'allow'
+  },
+
   // batched ambiguity tiebreaker: one call judges a whole chunk of items,
   // instead of one request per item (which floods the API on wide feeds)
   tiebreakBatch: async function (task, intent, items) {
