@@ -69,10 +69,18 @@ const intake = {
     }
   },
 
+  // true once any session has run this app-launch: only THEN does a new
+  // task replace a previous one and need the old tabs cleared. The very
+  // first task keeps whatever the user already had open.
+  sessionEverStarted: false,
+
   startSession: async function (task) {
     await ipc.invoke('ontask-start-session', task)
     console.log('ONTASK intake: session started with task:', task)
-    intake.resetWorkspace()
+    if (intake.sessionEverStarted) {
+      intake.resetWorkspace()
+    }
+    intake.sessionEverStarted = true
     intake.hide()
     window.dispatchEvent(new CustomEvent('ontask-session-changed'))
   },
@@ -90,6 +98,7 @@ const intake = {
   onResume: function () {
     ipc.invoke('ontask-resume-session').then(function () {
       console.log('ONTASK intake: previous session resumed')
+      intake.sessionEverStarted = true
       intake.hide()
       window.dispatchEvent(new CustomEvent('ontask-session-changed'))
     })
