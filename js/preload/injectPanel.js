@@ -17,7 +17,8 @@ var ontaskPanel = {
     style.textContent =
       '.ontask-panel{font-family:"Roboto","Plus Jakarta Sans",system-ui,sans-serif;' +
       'background:#faf7f3;border:1px solid #efe0e6;border-radius:16px;padding:18px 20px 20px;' +
-      'margin:0 0 22px 0;box-shadow:0 10px 30px -18px rgba(51,43,51,.4);color:#2c2733;}' +
+      'margin:0 0 22px 0;box-shadow:0 10px 30px -18px rgba(51,43,51,.4);color:#2c2733;' +
+      'grid-column:1/-1;width:100%;box-sizing:border-box;}' +
       '.ontask-panel .otp-head{display:flex;align-items:center;gap:9px;margin-bottom:3px;}' +
       '.ontask-panel .otp-mark{width:22px;height:22px;border-radius:7px;background:#fbe8f0;' +
       'display:grid;place-items:center;color:#b84268;font-size:13px;flex-shrink:0;}' +
@@ -163,7 +164,7 @@ function ontaskRegisterInjector (injector) {
   ontaskInjectors.push(injector)
 }
 
-var ontaskInjectState = { busy: {}, token: 0, cache: {} }
+var ontaskInjectState = { busy: {}, token: 0, cache: {}, node: {} }
 
 // SPA feeds (Reddit, YouTube) re-render and can wipe an injected sibling;
 // a light heartbeat re-adds it whenever it goes missing, even during the
@@ -201,24 +202,41 @@ function ontaskPanelRemove (id) {
   }
 }
 
+function ontaskReattach (inj) {
+  // synchronously re-insert the already-built panel node the moment the
+  // site's framework removes it — reusing the node (no rebuild, no async
+  // gap) means no visible flicker even if the site deletes it every frame
+  var node = ontaskInjectState.node[inj.name]
+  if (!node || node.isConnected || !inj.shouldInject(window.location)) {
+    return false
+  }
+  var anchor = inj.anchor()
+  if (anchor && anchor.parentNode && anchor !== node && !node.contains(anchor)) {
+    anchor.parentNode.insertBefore(node, anchor)
+    return true
+  }
+  return false
+}
+
 function ontaskInjectOne (inj) {
   if (!inj.shouldInject(window.location)) {
     ontaskPanelRemove(inj.id)
+    ontaskInjectState.node[inj.name] = null
     return
   }
-  if (document.getElementById(inj.id) || ontaskInjectState.busy[inj.name]) {
+  // already built this session: keep it attached, don't rebuild
+  if (ontaskInjectState.node[inj.name]) {
+    ontaskReattach(inj)
     return
   }
-  if (!inj.anchor()) {
+  if (document.getElementById(inj.id) || ontaskInjectState.busy[inj.name] || !inj.anchor()) {
     return
   }
   ontaskInjectState.busy[inj.name] = true
   ontaskBridge.getSuggestions(function (data) {
     ontaskInjectState.busy[inj.name] = false
-    if (!data || !data.task || !inj.shouldInject(window.location)) {
-      return
-    }
-    if (document.getElementById(inj.id)) {
+    if (!data || !data.task || !inj.shouldInject(window.location) ||
+        ontaskInjectState.node[inj.name] || document.getElementById(inj.id)) {
       return
     }
     var anchor = inj.anchor()
@@ -233,26 +251,37 @@ function ontaskInjectOne (inj) {
       searchPath: inj.searchPath
     })
     anchor.parentNode.insertBefore(built.panel, anchor)
+    ontaskInjectState.node[inj.name] = built.panel
+    ontaskEnsureInjectGuard()
 
     var query = (data.terms && data.terms[0]) || data.task
-    var cached = ontaskInjectState.cache[inj.name]
-    // reuse fetched items when re-injecting after an SPA wipe (same query):
-    // no re-fetch, no flicker
-    if (cached && cached.query === query && cached.items.length) {
-      ontaskPanelFill(built.itemsEl, cached.items)
-      return
-    }
     var token = ++ontaskInjectState.token
     inj.fetchItems(query, function (items) {
       items = (items || []).filter(function (i) { return i && i.href && i.title })
-      ontaskInjectState.cache[inj.name] = { query: query, items: items }
-      if (token !== ontaskInjectState.token || !built.itemsEl.isConnected) {
+      if (token !== ontaskInjectState.token || ontaskInjectState.node[inj.name] !== built.panel) {
         return
       }
       ontaskPanelFill(built.itemsEl, items)
       console.log('ONTASK injected ' + items.length + ' on-task items on ' + inj.name)
     })
   })
+}
+
+// a single MutationObserver that instantly re-attaches any panel a site
+// removes — fires before paint, so removals never become visible
+var ontaskInjectGuard = null
+function ontaskEnsureInjectGuard () {
+  if (ontaskInjectGuard) {
+    return
+  }
+  ontaskInjectGuard = new MutationObserver(function () {
+    ontaskInjectors.forEach(function (inj) {
+      if (ontaskInjectState.node[inj.name]) {
+        ontaskReattach(inj)
+      }
+    })
+  })
+  ontaskInjectGuard.observe(document.documentElement, { childList: true, subtree: true })
 }
 
 function ontaskPanelFill (itemsEl, items) {
@@ -265,6 +294,7 @@ function ontaskPanelFill (itemsEl, items) {
 function ontaskClearInjectors () {
   ontaskInjectors.forEach(function (inj) {
     ontaskPanelRemove(inj.id)
+    ontaskInjectState.node[inj.name] = null
   })
   ontaskInjectState.cache = {}
   ontaskInjectState.token++

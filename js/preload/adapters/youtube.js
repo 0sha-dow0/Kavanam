@@ -304,9 +304,18 @@ ontaskRegisterInjector({
   id: 'ontask-focus-panel',
   match: function (loc) { return /(^|\.)youtube\.com$/.test(loc.hostname) },
   shouldInject: function (loc) { return loc.pathname === '/' },
+  // insert INSIDE the grid's #contents (stable under Polymer reconciliation);
+  // a sibling of #primary gets continuously deleted and re-added (flicker)
   anchor: function () {
-    return document.querySelector('ytd-rich-grid-renderer') ||
-      document.querySelector('ytd-browse[page-subtype="home"] #primary #contents')
+    var grid = document.querySelector('ytd-rich-grid-renderer')
+    if (!grid) {
+      return null
+    }
+    var contents = grid.querySelector('#contents')
+    if (contents) {
+      return contents.firstElementChild || contents
+    }
+    return grid
   },
   searchPath: function (term) { return '/results?search_query=' + encodeURIComponent(term) },
   fetchItems: ontaskYouTubeAdapter.fetchItems
