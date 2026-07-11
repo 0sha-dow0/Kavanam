@@ -53,10 +53,14 @@ test('card batches are bounded and deduplicated', () => {
   // duplicate or malformed items are skipped (first occurrence wins) —
   // one bad card must not disable curation for the whole page
   const deduped = boundary.cleanItems(event, {
+    curationId: 'batch-1',
+    total: 3,
     items: [{ id: 'same', text: 'one' }, { id: 'same', text: 'two' }, { id: 7, text: 'bad id' }]
   })
   assert.equal(deduped.items.length, 1)
   assert.equal(deduped.items[0].text, 'one')
+  assert.equal(deduped.curationId, 'batch-1')
+  assert.equal(deduped.total, 1) // after dedup, only 1 item remains
   // structural abuse still rejects wholesale
   assert.throws(() => boundary.cleanItems(event, {
     items: Array.from({ length: 51 }, (_, i) => ({ id: String(i), text: 'text' }))

@@ -141,7 +141,21 @@ const ontaskIPC = {
         context = null // context is advisory: a bad one is just ignored
       }
     }
-    return { sender: content.sender, url: content.url, items: items, context: context }
+    var curationId = null
+    if (typeof payload.curationId === 'string') {
+      try {
+        curationId = ontaskIPC.cleanText(payload.curationId, 100, 1)
+      } catch (e) {}
+    }
+    var total = items.length
+    return {
+      sender: content.sender,
+      url: content.url,
+      items: items,
+      context: context,
+      curationId: curationId,
+      total: total
+    }
   },
 
   take: function (event, bucket, limit, windowMs) {

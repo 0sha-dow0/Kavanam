@@ -1,11 +1,16 @@
 /*
 OnTask FocusSessionStore — single source of truth for the focus session.
 Lives in the main process so every tab shares one task context.
-The task is immutable for the session: there is no API to change it once set.
+Task edits retain timing history while rebuilding the relevance context.
 */
 
 var focusSession = {
   session: null,
+
+  initializeTaskContext: function (session) {
+    ontaskRelevanceEngine.onSessionStart(session.task)
+    focusSession.runGoalExpansion(session)
+  },
 
   start: function (task) {
     if (focusSession.session) {
@@ -15,6 +20,7 @@ var focusSession = {
     if (!task) {
       throw new Error('A focus task is required')
     }
+    var now = Date.now()
     focusSession.session = {
       task: task,
       taskEmbedding: null,
@@ -27,14 +33,18 @@ var focusSession = {
       subtasks: [],
       approvedHosts: [], // hosts Groq ruled on-task this session (skip re-judging)
       judgedSearches: {}, // search query -> allow/block from Groq this session
-      startedAt: Date.now()
+      startedAt: now,
+      openedAt: now,
+      totalFocusMs: 0,
+      currentFocusMs: 0,
+      resumeCount: 0,
+      pauseCount: 0,
+      paused: false
     }
     console.log('ONTASK session started:', task)
     ontaskPersistence.onSessionStart(focusSession.session)
 
-    // local task embedding (never blocks session start)
-    ontaskRelevanceEngine.onSessionStart(task)
-    focusSession.runGoalExpansion(focusSession.session)
+    focusSession.initializeTaskContext(focusSession.session)
     return focusSession.session
   },
 
@@ -91,8 +101,8 @@ var focusSession = {
     focusSession.session = {
       task: saved.task.trim(),
       taskEmbedding: null,
-      expandedIntent: null,
-      keywords: [],
+      expandedIntent: saved.expandedIntent || null,
+      keywords: Array.isArray(saved.keywords) ? saved.keywords.slice() : [],
       subtask: null,
       subtaskEmbedding: null,
       allowlist: (Array.isArray(saved.allowlist) ? saved.allowlist : []).filter(function (d) {
@@ -102,13 +112,46 @@ var focusSession = {
       subtasks: [],
       approvedHosts: [],
       judgedSearches: {},
-      startedAt: Number(saved.startedAt) || Date.now()
+      startedAt: Number(saved.startedAt) || Date.now(),
+      openedAt: Date.now(),
+      totalFocusMs: Math.max(0, Number(saved.totalFocusMs) || 0),
+      currentFocusMs: 0,
+      resumeCount: Math.max(0, Number(saved.resumeCount) || 0) + 1,
+      pauseCount: Math.max(0, Number(saved.pauseCount) || 0),
+      paused: false
     }
     ontaskPersistence.onSessionUpdate(focusSession.session)
-    ontaskRelevanceEngine.onSessionStart(focusSession.session.task)
-    focusSession.runGoalExpansion(focusSession.session)
+    focusSession.initializeTaskContext(focusSession.session)
     console.log('ONTASK session resumed:', focusSession.session.task)
     return focusSession.session
+  },
+
+  edit: function (task) {
+    if (!focusSession.session) {
+      throw new Error('No focus session is active')
+    }
+    task = String(task || '').trim()
+    if (!task) {
+      throw new Error('A focus task is required')
+    }
+    var session = focusSession.session
+    session.task = task
+    session.taskEmbedding = null
+    session.expandedIntent = null
+    session.keywords = []
+    session.subtask = null
+    session.subtaskEmbedding = null
+    session.allowlist = []
+    session.overrides = []
+    ontaskPersistence.onSessionUpdate(session)
+    focusSession.initializeTaskContext(session)
+    webContents.getAllWebContents().forEach(function (wc) {
+      try {
+        wc.send('ontask-clear')
+      } catch (e) {}
+    })
+    console.log('ONTASK session task edited:', task)
+    return session
   },
 
   get: function () {
@@ -125,14 +168,50 @@ var focusSession = {
     }
   },
 
+  updateCurrentFocusMs: function (milliseconds) {
+    if (focusSession.session && Number.isFinite(Number(milliseconds))) {
+      focusSession.session.currentFocusMs = Math.max(
+        focusSession.session.currentFocusMs,
+        Number(milliseconds)
+      )
+    }
+  },
+
+  setPaused: function (paused) {
+    if (!focusSession.session) {
+      return null
+    }
+    paused = !!paused
+    if (paused && !focusSession.session.paused) {
+      focusSession.session.pauseCount += 1
+    }
+    focusSession.session.paused = paused
+    ontaskPersistence.onSessionUpdate(focusSession.session)
+    return focusSession.session
+  },
+
   end: function () {
     console.log('ONTASK session ended')
+    if (focusSession.session) {
+      ontaskPersistence.onSessionComplete(focusSession.session)
+    }
+    focusSession.session = null
+    ontaskRelevanceEngine.onSessionEnd()
+    // un-hide everything everywhere; tabs stay open (Q40)
+    webContents.getAllWebContents().forEach(function (wc) {
+      try {
+        wc.send('ontask-clear')
+      } catch (e) {}
+    })
+  },
+
+  leave: function () {
+    console.log('ONTASK session left unfinished')
     if (focusSession.session) {
       ontaskPersistence.onSessionUpdate(focusSession.session)
     }
     focusSession.session = null
     ontaskRelevanceEngine.onSessionEnd()
-    // un-hide everything everywhere; tabs stay open (Q40)
     webContents.getAllWebContents().forEach(function (wc) {
       try {
         wc.send('ontask-clear')
@@ -152,7 +231,13 @@ var focusSession = {
       expandedIntent: focusSession.session.expandedIntent,
       allowlist: focusSession.session.allowlist,
       overrides: focusSession.session.overrides,
-      startedAt: focusSession.session.startedAt
+      startedAt: focusSession.session.startedAt,
+      openedAt: focusSession.session.openedAt,
+      totalFocusMs: focusSession.session.totalFocusMs,
+      currentFocusMs: focusSession.session.currentFocusMs,
+      resumeCount: focusSession.session.resumeCount,
+      pauseCount: focusSession.session.pauseCount,
+      paused: focusSession.session.paused
     }
   }
 }
@@ -162,6 +247,25 @@ ipc.handle('ontask-get-session', function (e) {
   return focusSession.publicState()
 })
 
+ipc.on('ontask-focus-heartbeat', function (e, currentFocusMs) {
+  ontaskIPC.requireChrome(e)
+  if (focusSession.session) {
+    focusSession.updateCurrentFocusMs(currentFocusMs)
+    ontaskPersistence.onSessionUpdate(focusSession.session)
+  }
+})
+
+ipc.on('ontask-user-activity', function (e) {
+  try {
+    ontaskIPC.requireContent(e)
+  } catch (err) {
+    return
+  }
+  try {
+    sendIPCToWindow(windows.getCurrent(), 'ontask-user-activity', {})
+  } catch (e) {}
+})
+
 ipc.handle('ontask-start-session', function (e, task) {
   ontaskIPC.requireChrome(e)
   ontaskIPC.take(e, 'session', 5, 60000)
@@ -169,18 +273,45 @@ ipc.handle('ontask-start-session', function (e, task) {
   return focusSession.publicState()
 })
 
-ipc.handle('ontask-resume-session', function (e) {
+ipc.handle('ontask-resume-session', function (e, startedAt) {
   ontaskIPC.requireChrome(e)
   ontaskIPC.take(e, 'session', 5, 60000)
-  focusSession.resume(ontaskPersistence.getLastSession())
+  var saved = startedAt
+    ? ontaskPersistence.getSession(startedAt)
+    : ontaskPersistence.getLastSession()
+  focusSession.resume(saved)
   return focusSession.publicState()
 })
 
-ipc.handle('ontask-end-session', function (e) {
+ipc.handle('ontask-end-session', function (e, currentFocusMs) {
   ontaskIPC.requireChrome(e)
   ontaskIPC.take(e, 'session', 5, 60000)
+  focusSession.updateCurrentFocusMs(currentFocusMs)
   focusSession.end()
   return null
+})
+
+ipc.handle('ontask-leave-session', function (e, currentFocusMs) {
+  ontaskIPC.requireChrome(e)
+  ontaskIPC.take(e, 'session', 5, 60000)
+  focusSession.updateCurrentFocusMs(currentFocusMs)
+  focusSession.leave()
+  return null
+})
+
+ipc.handle('ontask-edit-session', function (e, task) {
+  ontaskIPC.requireChrome(e)
+  ontaskIPC.take(e, 'session', 5, 60000)
+  focusSession.edit(ontaskIPC.cleanTask(task))
+  return focusSession.publicState()
+})
+
+ipc.handle('ontask-set-paused', function (e, paused, currentFocusMs) {
+  ontaskIPC.requireChrome(e)
+  ontaskIPC.take(e, 'control', 30, 60000)
+  focusSession.updateCurrentFocusMs(currentFocusMs)
+  focusSession.setPaused(paused)
+  return focusSession.publicState()
 })
 
 ipc.handle('ontask-override-add', function (e, record) {

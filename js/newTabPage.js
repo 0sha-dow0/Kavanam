@@ -1,11 +1,14 @@
 const path = require('path')
 const statistics = require('js/statistics.js')
+const searchbar = require('searchbar/searchbar.js')
 
 const newTabPage = {
   background: document.getElementById('ntp-background'),
   hasBackground: false,
   picker: document.getElementById('ntp-image-picker'),
   deleteBackground: document.getElementById('ntp-image-remove'),
+  searchForm: document.getElementById('ntp-search-form'),
+  searchInput: document.getElementById('ntp-search-input'),
   imagePath: path.join(window.globalArgs['user-data-path'], 'newTabBackground'),
   blobInstance: null,
   reloadBackground: function () {
@@ -34,6 +37,15 @@ const newTabPage = {
   },
   initialize: function () {
     newTabPage.reloadBackground()
+
+    newTabPage.searchForm.addEventListener('submit', function (e) {
+      e.preventDefault()
+      var value = newTabPage.searchInput.value.trim()
+      if (value) {
+        newTabPage.searchInput.value = ''
+        searchbar.openURL(value, e)
+      }
+    })
 
     newTabPage.picker.addEventListener('click', async function () {
       var filePath = await ipc.invoke('showOpenDialog', {

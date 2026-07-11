@@ -33,14 +33,14 @@
 /* navbar buttons */
 
 #toolbar-navigation-buttons {
-  width: 2rem;
+  width: 4rem;
   transition: 0.1s width;
   white-space: nowrap;
   overflow: hidden;
 }
 
 #toolbar-navigation-buttons.can-go-forward:hover {
-  width: 4rem;
+  width: 6rem;
 }
 
 body.is-edit-mode #toolbar-navigation-buttons {
@@ -48,6 +48,7 @@ body.is-edit-mode #toolbar-navigation-buttons {
 }
 
 #back-button,
+#reload-button,
 #forward-button {
   opacity: 1;
   transition: none;
@@ -55,11 +56,13 @@ body.is-edit-mode #toolbar-navigation-buttons {
   width: 2rem;
 }
 #back-button:disabled,
+#reload-button:disabled,
 #forward-button:disabled {
   opacity: 0.2;
 }
 
 /* Remove default space from being inline-block */
+#reload-button,
 #forward-button {
   margin-left: -0.25rem;
 }
