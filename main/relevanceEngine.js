@@ -1,8 +1,10 @@
 /*
 OnTask RelevanceEngine — one engine, three surfaces.
-Local tier: bundled all-MiniLM-L6-v2 (transformers.js/ONNX, offline) with
-cosine similarity against the task AND live subtask (keep the higher, Q10).
-Groq tier: ambiguity tiebreaker for the 0.40–0.55 band only (Q7/Q8).
+Local tier: bundled bge-small-en-v1.5 (transformers.js/ONNX, offline) with
+cosine similarity against the task AND live subtask (keep the higher, Q10);
+the task side carries bge's query instruction, candidates do not.
+Groq tier: judges the ambiguous middle band. A session learning loop caches
+Groq's verdicts as labeled embeddings so similar items are decided locally.
 Failure classes: engine outage fails OPEN (Q27); ambiguity fails CLOSED
 while a tiebreak is pending (Q8); cold start shows items then filters (Q11).
 */
@@ -18,7 +20,10 @@ const ontaskRelevanceEngine = {
   verdictCache: {},
   tiebreakInflight: {},
   revision: 0,
-  bands: { on: 0.55, off: 0.40 },
+  // calibrated for bge-small-en-v1.5 (query prefix): on-task content clusters
+  // 0.60–0.81, off-task ~0.39, cleanly separated. Only clear-cut items are
+  // decided locally; the 0.45–0.60 middle goes to the Groq judge for nuance.
+  bands: { on: 0.60, off: 0.45 },
 
   broadcast: function (channel) {
     webContents.getAllWebContents().forEach(function (wc) {
@@ -42,6 +47,7 @@ const ontaskRelevanceEngine = {
 
   invalidate: function () {
     ontaskRelevanceEngine.revision++
+    ontaskRelevanceEngine.learned = { on: [], off: [] }
     ontaskRelevanceEngine.verdictCache = {}
     ontaskRelevanceEngine.tiebreakInflight = {}
     ontaskRelevanceEngine.broadcast('ontask-rescore')
@@ -55,13 +61,13 @@ const ontaskRelevanceEngine = {
     ontaskRelevanceEngine.loadPromise = import('@xenova/transformers')
       .then(function (tf) {
         tf.env.allowRemoteModels = false
-        tf.env.localModelPath = path.join(__dirname, 'models', 'minilm')
-        return tf.pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', { quantized: true })
+        tf.env.localModelPath = path.join(__dirname, 'models', 'bge')
+        return tf.pipeline('feature-extraction', 'Xenova/bge-small-en-v1.5', { quantized: true })
       })
       .then(function (extractor) {
         ontaskRelevanceEngine.extractor = extractor
         ontaskRelevanceEngine.status = 'ready'
-        console.log('ONTASK engine ready (MiniLM loaded)')
+        console.log('ONTASK engine ready (bge-small-en-v1.5 loaded)')
         return extractor
       })
       .catch(function (err) {
@@ -70,6 +76,11 @@ const ontaskRelevanceEngine = {
       })
     return ontaskRelevanceEngine.loadPromise
   },
+
+  // bge scores query->passage relevance best when the reference side (task,
+  // subtask, goals) carries this instruction and candidates (items, urls,
+  // page text) do not.
+  QUERY_PREFIX: 'Represent this sentence for searching relevant passages: ',
 
   embed: async function (text) {
     var extractor = await ontaskRelevanceEngine.ensureLoaded()
@@ -83,6 +94,16 @@ const ontaskRelevanceEngine = {
       ontaskRelevanceEngine.disable(err)
       return null
     }
+  },
+
+  // reference/query side (task, subtask, goals): gets the bge instruction
+  embedQuery: function (text) {
+    return ontaskRelevanceEngine.embed(ontaskRelevanceEngine.QUERY_PREFIX + String(text))
+  },
+
+  // candidate/passage side (items, urls, page text): no prefix
+  embedPassage: function (text) {
+    return ontaskRelevanceEngine.embed(text)
   },
 
   // embeddings are normalized, so cosine similarity is the dot product
@@ -104,7 +125,7 @@ const ontaskRelevanceEngine = {
     ontaskRelevanceEngine.taskEmbedding = null
     ontaskRelevanceEngine.goalEmbeddings = []
     ontaskRelevanceEngine.invalidate()
-    ontaskRelevanceEngine.taskReadyPromise = ontaskRelevanceEngine.embed(task).then(function (embedding) {
+    ontaskRelevanceEngine.taskReadyPromise = ontaskRelevanceEngine.embedQuery(task).then(function (embedding) {
       if (focusSession.get() !== session || ontaskRelevanceEngine.taskText !== task) {
         return null
       }
@@ -134,7 +155,7 @@ const ontaskRelevanceEngine = {
     var subtasks = session.subtasks || []
     var embeddings = await Promise.all(
       [rich].concat(subtasks).map(function (text) {
-        return ontaskRelevanceEngine.embed(text)
+        return ontaskRelevanceEngine.embedQuery(text)
       })
     )
     if (embeddings[0] && focusSession.session === session) {
@@ -147,7 +168,7 @@ const ontaskRelevanceEngine = {
 
   onSubtask: async function (subtask) {
     var session = focusSession.get()
-    var emb = await ontaskRelevanceEngine.embed(subtask)
+    var emb = await ontaskRelevanceEngine.embedQuery(subtask)
     if (emb && focusSession.get() === session && session.subtask === subtask) {
       ontaskRelevanceEngine.subtaskEmbedding = emb
       ontaskRelevanceEngine.invalidate()
@@ -156,6 +177,7 @@ const ontaskRelevanceEngine = {
 
   onSessionEnd: function () {
     ontaskRelevanceEngine.taskText = null
+    ontaskRelevanceEngine.learned = { on: [], off: [] }
     ontaskRelevanceEngine.taskEmbedding = null
     ontaskRelevanceEngine.subtaskEmbedding = null
     ontaskRelevanceEngine.goalEmbeddings = []
@@ -180,10 +202,14 @@ const ontaskRelevanceEngine = {
     if (!ontaskRelevanceEngine.enforcing()) {
       return null
     }
-    var emb = await ontaskRelevanceEngine.embed(text)
+    var emb = await ontaskRelevanceEngine.embedPassage(text)
     if (!emb) {
       return null
     }
+    return ontaskRelevanceEngine.scoreFromEmb(emb, opts)
+  },
+
+  scoreFromEmb: function (emb, opts) {
     var best = ontaskRelevanceEngine.similarity(emb, ontaskRelevanceEngine.taskEmbedding)
     // Groq sub-goals are part of the task definition (not page-derived),
     // so they count even under taskOnly
@@ -198,6 +224,53 @@ const ontaskRelevanceEngine = {
     }
     var s2 = ontaskRelevanceEngine.similarity(emb, ontaskRelevanceEngine.subtaskEmbedding)
     return Math.max(best === null ? -1 : best, s2 === null ? -1 : s2)
+  },
+
+  /* ---------- session learning loop (B) ----------
+     Every verdict Groq gives is remembered as a labeled item embedding.
+     A new borderline item that closely matches a previously-judged one is
+     decided locally from that memory — no repeat Groq call. This distills
+     Groq's judgment into fast, offline, private decisions over the session,
+     and keeps working if Groq later becomes unavailable. */
+
+  learned: { on: [], off: [] },
+  LEARN_MAX: 40, // exemplars kept per label
+  LEARN_MATCH: 0.82, // an item must be this similar to a known one to reuse it
+  LEARN_MARGIN: 0.06, // and this much closer to that label than the other
+
+  recordExemplar: function (emb, verdict) {
+    if (!emb) {
+      return
+    }
+    var bucket = ontaskRelevanceEngine.learned[verdict === 'show' ? 'on' : 'off']
+    bucket.push(emb)
+    if (bucket.length > ontaskRelevanceEngine.LEARN_MAX) {
+      bucket.shift() // drop oldest
+    }
+  },
+
+  nearest: function (emb, bucket) {
+    var best = -1
+    for (var i = 0; i < bucket.length; i++) {
+      var s = ontaskRelevanceEngine.similarity(emb, bucket[i])
+      if (s !== null && s > best) {
+        best = s
+      }
+    }
+    return best
+  },
+
+  // high-precision local reuse of a remembered Groq verdict, or null
+  classifyByExemplars: function (emb) {
+    var onMax = ontaskRelevanceEngine.nearest(emb, ontaskRelevanceEngine.learned.on)
+    var offMax = ontaskRelevanceEngine.nearest(emb, ontaskRelevanceEngine.learned.off)
+    if (onMax >= ontaskRelevanceEngine.LEARN_MATCH && onMax - offMax >= ontaskRelevanceEngine.LEARN_MARGIN) {
+      return 'show'
+    }
+    if (offMax >= ontaskRelevanceEngine.LEARN_MATCH && offMax - onMax >= ontaskRelevanceEngine.LEARN_MARGIN) {
+      return 'hide'
+    }
+    return null
   },
 
   band: function (score) {
@@ -218,7 +291,7 @@ const ontaskRelevanceEngine = {
   show | hide | pending. Ambiguous items return 'pending' (fail closed, Q8)
   and resolve later through onUpdate([{id, verdict}]).
   */
-  HARD_OFF: 0.28, // below this an item is unambiguously unrelated
+  HARD_OFF: 0.45, // below this (bge) an item is unambiguously unrelated
 
   scoreItems: async function (items, onUpdate, pageURL, pageContext) {
     var results = []
@@ -292,14 +365,16 @@ const ontaskRelevanceEngine = {
       toScore.push(item)
     }
 
-    // embed the batch concurrently: serial awaits made the first reveal
-    // wave feel slow on large feeds
-    var scores = await Promise.all(toScore.map(function (item) {
-      return ontaskRelevanceEngine.scoreText(item.text)
+    // embed the batch concurrently (reused for scoring AND exemplar match);
+    // serial awaits made the first reveal wave feel slow on large feeds
+    var embs = await Promise.all(toScore.map(function (item) {
+      return ontaskRelevanceEngine.embedPassage(item.text)
     }))
+    var learnedHits = 0
     for (var j = 0; j < toScore.length; j++) {
       var scoredItem = toScore[j]
-      var score = scores[j]
+      var emb = embs[j]
+      var score = emb ? ontaskRelevanceEngine.scoreFromEmb(emb) : null
       var cacheKey = ontaskRelevanceEngine.cacheKey(scoredItem)
       var band = ontaskRelevanceEngine.band(score)
       if (band === null) {
@@ -317,12 +392,23 @@ const ontaskRelevanceEngine = {
         // degraded (no Groq): fall back to the local band decision
         ontaskRelevanceEngine.verdictCache[cacheKey] = 'hide'
         results.push({ id: scoredItem.id, verdict: 'hide' })
+      } else if (ontaskRelevanceEngine.classifyByExemplars(emb)) {
+        // learned this session: reuse a remembered Groq verdict, skip the call
+        var learnedVerdict = ontaskRelevanceEngine.classifyByExemplars(emb)
+        ontaskRelevanceEngine.verdictCache[cacheKey] = learnedVerdict
+        results.push({ id: scoredItem.id, verdict: learnedVerdict })
+        learnedHits++
       } else {
+        scoredItem._emb = emb // let Groq's verdict be remembered (below)
         // possibly-related: withhold and let Groq judge relatedness with
         // the task, its sub-tasks, and the page context (Q8)
         results.push({ id: scoredItem.id, verdict: 'pending' })
         ambiguous.push(scoredItem)
       }
+    }
+    if (learnedHits) {
+      console.log('ONTASK learning loop resolved ' + learnedHits + ' item(s) locally (on=' +
+        ontaskRelevanceEngine.learned.on.length + ' off=' + ontaskRelevanceEngine.learned.off.length + ' exemplars)')
     }
     if (ambiguous.length) {
       // one batched Groq call per chunk — never one request per item
@@ -363,6 +449,11 @@ const ontaskRelevanceEngine = {
           onUpdate(judged.map(function (record) {
             var final = record.verdict === 'on' ? 'show' : 'hide'
             ontaskRelevanceEngine.verdictCache[ontaskRelevanceEngine.cacheKey(record)] = final
+            // remember this Groq verdict so similar items are decided locally
+            var src = chunk.filter(function (it) { return it.id === record.id })[0]
+            if (src && src._emb) {
+              ontaskRelevanceEngine.recordExemplar(src._emb, final)
+            }
             return { id: record.id, verdict: final }
           }))
         }).catch(function (err) {

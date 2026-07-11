@@ -17,10 +17,9 @@ if (isOnTaskE2EMode) {
   }
   ontaskRelevanceEngine.onGoalExpanded = async function () {}
   ontaskRelevanceEngine.onSubtask = async function () {}
-  ontaskRelevanceEngine.scoreText = async function (text) {
-    if (ontaskE2EMode === 'outage') {
-      throw new Error('E2E scoring outage')
-    }
+  // deterministic 1-dim embeddings carrying the intended score; scoreItems
+  // embeds via embedPassage then reads it back via scoreFromEmb
+  var ontaskE2EScore = function (text) {
     text = String(text || '')
     if (/\[ON\]|on-task/i.test(text)) {
       return 0.9
@@ -29,6 +28,21 @@ if (isOnTaskE2EMode) {
       return 0.5
     }
     return 0.1
+  }
+  ontaskRelevanceEngine.embedPassage = async function (text) {
+    if (ontaskE2EMode === 'outage') {
+      throw new Error('E2E scoring outage')
+    }
+    return [ontaskE2EScore(text)]
+  }
+  ontaskRelevanceEngine.scoreFromEmb = function (emb) {
+    return emb ? emb[0] : null
+  }
+  ontaskRelevanceEngine.scoreText = async function (text) {
+    if (ontaskE2EMode === 'outage') {
+      throw new Error('E2E scoring outage')
+    }
+    return ontaskE2EScore(text)
   }
 
   global.__ontaskE2E = {
