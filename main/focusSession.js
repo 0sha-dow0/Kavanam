@@ -31,35 +31,38 @@ var focusSession = {
 
     // local task embedding (never blocks session start)
     ontaskRelevanceEngine.onSessionStart(task)
-
-    // Groq goal expansion: intent + keywords + seed allowlist (Q16);
-    // unreachable Groq -> local-only degraded mode (Q28)
-    if (ontaskGroqClient.available()) {
-      var startedSession = focusSession.session
-      ontaskGroqClient.expandGoal(task).then(function (expansion) {
-        if (focusSession.session !== startedSession) {
-          return
-        }
-        startedSession.expandedIntent = expansion.intent
-        startedSession.keywords = expansion.keywords
-        expansion.domains.forEach(function (d) {
-          if (startedSession.allowlist.indexOf(d) === -1) {
-            startedSession.allowlist.push(d)
-          }
-        })
-        ontaskPersistence.onSessionUpdate(startedSession)
-        ontaskRelevanceEngine.onGoalExpanded(startedSession)
-        console.log('ONTASK goal expanded:', JSON.stringify({ intent: expansion.intent, keywords: expansion.keywords, allowlist: startedSession.allowlist }))
-        try {
-          sendIPCToWindow(windows.getCurrent(), 'ontask-session-changed', {})
-        } catch (e) {}
-      }).catch(function (err) {
-        console.warn('ONTASK goal expansion failed, local-only degraded mode:', err.message)
-      })
-    } else {
-      console.log('ONTASK no Groq key — local-only degraded mode')
-    }
+    focusSession.runGoalExpansion(focusSession.session)
     return focusSession.session
+  },
+
+  // Groq goal expansion: intent + keywords + seed allowlist (Q16);
+  // unreachable Groq -> local-only degraded mode (Q28). Runs on start AND
+  // resume — a resumed session must judge as sharply as a fresh one.
+  runGoalExpansion: function (session) {
+    if (!ontaskGroqClient.available()) {
+      console.log('ONTASK no Groq key — local-only degraded mode')
+      return
+    }
+    ontaskGroqClient.expandGoal(session.task).then(function (expansion) {
+      if (focusSession.session !== session) {
+        return
+      }
+      session.expandedIntent = expansion.intent
+      session.keywords = expansion.keywords
+      expansion.domains.forEach(function (d) {
+        if (session.allowlist.indexOf(d) === -1) {
+          session.allowlist.push(d)
+        }
+      })
+      ontaskPersistence.onSessionUpdate(session)
+      ontaskRelevanceEngine.onGoalExpanded(session)
+      console.log('ONTASK goal expanded:', JSON.stringify({ intent: expansion.intent, keywords: expansion.keywords, allowlist: session.allowlist }))
+      try {
+        sendIPCToWindow(windows.getCurrent(), 'ontask-session-changed', {})
+      } catch (e) {}
+    }).catch(function (err) {
+      console.warn('ONTASK goal expansion failed, local-only degraded mode:', err.message)
+    })
   },
 
   resume: function (saved) {
@@ -82,6 +85,7 @@ var focusSession = {
     }
     ontaskPersistence.onSessionUpdate(focusSession.session)
     ontaskRelevanceEngine.onSessionStart(focusSession.session.task)
+    focusSession.runGoalExpansion(focusSession.session)
     console.log('ONTASK session resumed:', focusSession.session.task)
     return focusSession.session
   },

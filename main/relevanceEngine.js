@@ -215,43 +215,76 @@ const ontaskRelevanceEngine = {
     is judged by Groq WITH the page context.
     */
     var lenientOffBar = ontaskRelevanceEngine.bands.off
-    if (pageContext) {
+    // a search page that loaded at all was already judged on-task by the
+    // navigation guard (off-task searches are blocked before they load) —
+    // its results deserve leniency by construction
+    try {
+      if (pageURL && ontaskNavigationGuard.searchQueryOf(new URL(pageURL))) {
+        lenientOffBar = ontaskRelevanceEngine.HARD_OFF
+      }
+    } catch (e) {}
+    if (lenientOffBar !== ontaskRelevanceEngine.HARD_OFF && pageContext) {
       var contextScore = await ontaskRelevanceEngine.scoreText(pageContext, { taskOnly: true })
       if (contextScore !== null && contextScore >= ontaskRelevanceEngine.bands.on) {
         lenientOffBar = ontaskRelevanceEngine.HARD_OFF
       }
     }
 
+    // a link into a Groq-endorsed task domain is on-task by definition —
+    // no judging, no latency
+    var allowlist = (session && session.allowlist) || []
+    function allowlistedHost (id) {
+      try {
+        var hostname = new URL(id).hostname
+        return allowlist.some(function (d) {
+          return ontaskNavigationGuard.hostMatches(hostname, d)
+        })
+      } catch (e) {
+        return false
+      }
+    }
+
+    var toScore = []
     for (var i = 0; i < items.length; i++) {
       var item = items[i]
       var overridden = overrides.some(function (record) {
         return record.page === pageURL && record.id === item.id
       })
-      if (overridden) {
+      if (overridden || allowlistedHost(item.id)) {
         results.push({ id: item.id, verdict: 'show' })
         continue
       }
-      var cacheKey = ontaskRelevanceEngine.cacheKey(item)
-      var cached = ontaskRelevanceEngine.verdictCache[cacheKey]
+      var cached = ontaskRelevanceEngine.verdictCache[ontaskRelevanceEngine.cacheKey(item)]
       if (cached) {
         results.push({ id: item.id, verdict: cached })
         continue
       }
-      var score = await ontaskRelevanceEngine.scoreText(item.text)
+      toScore.push(item)
+    }
+
+    // embed the batch concurrently: serial awaits made the first reveal
+    // wave feel slow on large feeds
+    var scores = await Promise.all(toScore.map(function (item) {
+      return ontaskRelevanceEngine.scoreText(item.text)
+    }))
+    for (var j = 0; j < toScore.length; j++) {
+      var scoredItem = toScore[j]
+      var score = scores[j]
+      var cacheKey = ontaskRelevanceEngine.cacheKey(scoredItem)
       var band = ontaskRelevanceEngine.band(score)
       if (band === null) {
-        results.push({ id: item.id, verdict: 'show' }) // engine off: fail open
+        results.push({ id: scoredItem.id, verdict: 'show' }) // engine off: fail open
       } else if (band === 'on') {
         ontaskRelevanceEngine.verdictCache[cacheKey] = 'show'
-        results.push({ id: item.id, verdict: 'show' })
+        results.push({ id: scoredItem.id, verdict: 'show' })
       } else if (band === 'off' && score < lenientOffBar) {
         ontaskRelevanceEngine.verdictCache[cacheKey] = 'hide'
-        results.push({ id: item.id, verdict: 'hide' })
+        results.push({ id: scoredItem.id, verdict: 'hide' })
       } else {
         // mid-band (including off-band items on an on-task page): withhold
         // and let Groq judge with context (Q8)
-        results.push({ id: item.id, verdict: 'pending' })
-        ambiguous.push(item)
+        results.push({ id: scoredItem.id, verdict: 'pending' })
+        ambiguous.push(scoredItem)
       }
     }
     if (ambiguous.length) {

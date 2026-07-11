@@ -113,22 +113,48 @@ var ontaskGenericExtractor = {
     return results
   },
 
-  // stable id: the item's first link; fallback to a text hash
+  // stable id: prefer the item's external destination link (what the card
+  // is ABOUT) over same-host utility links; fallback to a text hash
   cardId: function (node) {
-    var link = node.querySelector('a[href]')
-    if (link && link.href && link.href.indexOf('javascript:') !== 0) {
-      return link.href
+    var links = node.querySelectorAll('a[href]')
+    var fallback = null
+    for (var i = 0; i < links.length; i++) {
+      var href = links[i].href
+      if (!href || href.indexOf('javascript:') === 0) {
+        continue
+      }
+      if (!fallback) {
+        fallback = href
+      }
+      try {
+        if (new URL(href).hostname !== window.location.hostname) {
+          return href
+        }
+      } catch (e) {}
+    }
+    if (fallback) {
+      return fallback
     }
     var text = (node.textContent || '').slice(0, 200)
     var hash = 0
-    for (var i = 0; i < text.length; i++) {
-      hash = (hash * 31 + text.charCodeAt(i)) | 0
+    for (var j = 0; j < text.length; j++) {
+      hash = (hash * 31 + text.charCodeAt(j)) | 0
     }
     return text ? 'g:' + hash : null
   },
 
   extractText: function (node) {
-    return (node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 500)
+    // join text nodes with spaces: adjacent inline elements otherwise mash
+    // ("site.comFree Resume Builder") and poison embeddings and prompts
+    var parts = []
+    var walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+    while (walker.nextNode()) {
+      var value = walker.currentNode.nodeValue.trim()
+      if (value) {
+        parts.push(value)
+      }
+    }
+    return parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 500)
   },
 
   // what is this page ABOUT: title + h1 + meta description (for Q15)

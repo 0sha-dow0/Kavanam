@@ -7,7 +7,7 @@ Unavailable/unreachable Groq degrades to local-only mode; it never crashes.
 
 const ontaskGroqClient = {
   keyCache: undefined,
-  MODEL: 'llama-3.1-8b-instant',
+  MODEL: 'llama-3.3-70b-versatile',
 
   secureKeyPath: function () {
     return path.join(app.getPath('userData'), 'ontask-groq-key.enc')
@@ -173,16 +173,18 @@ const ontaskGroqClient = {
       'You judge whether content items are relevant to the user\'s current task. ' +
       'Mark "on" anything plausibly useful for the task — tools, services, guides, and results count even when their snippet reads like marketing. ' +
       'Mark "off" only content clearly unrelated to the task. ' +
-      'Respond with JSON only: {"verdicts": ["on" or "off", ...]} — exactly one entry per numbered item, in order.',
+      'Respond with JSON only, keyed by item number: {"verdicts": {"1": "on", "2": "off", ...}} — one entry per numbered item.',
       'Task: ' + task + (intent ? '\nTask intent: ' + intent : '') +
       (pageContext ? '\nThe user is currently viewing: ' + pageContext : '') +
       '\nItems:\n' + numbered,
       true
     )
     var parsed = JSON.parse(content)
-    var list = Array.isArray(parsed.verdicts) ? parsed.verdicts : []
+    var verdicts = parsed.verdicts || {}
     return items.map(function (item, i) {
-      return { id: item.id, text: item.text, verdict: list[i] === 'on' ? 'on' : 'off' }
+      var entry = Array.isArray(verdicts) ? verdicts[i] : verdicts[String(i + 1)]
+      // a missing or malformed entry means uncertainty — never hide on that
+      return { id: item.id, text: item.text, verdict: entry === 'off' ? 'off' : 'on' }
     })
   },
 
