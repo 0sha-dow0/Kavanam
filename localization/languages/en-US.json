@@ -26,6 +26,7 @@
     "pasteAndMatchStyle": "Paste and Match Style",
     "goBack": "Go Back",
     "goForward": "Go Forward",
+    "reload": "Reload",
     "inspectElement": "Inspect Element",
     "translatePage": "Translate Page",
     /* searchbar */

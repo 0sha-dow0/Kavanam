@@ -30,11 +30,10 @@ test('real preload filters content and blocks off-task navigation', async ({}, t
 
     const offRequests = site.requestCount('/off-task/page')
     await content.locator('#blocked-nav').click({ noWaitAfter: true })
-    // a block is an event, not a state: the badge flashes Blocked, then
-    // reverts to the current page's real band
-    await expect(chrome.locator('#ontask-status-text')).toHaveText('Blocked')
+    // off-task navigation is blocked: the off-task page is never requested,
+    // and the blocked dialog appears
+    await expect(chrome.locator('#ontask-blocked')).toBeVisible()
     expect(site.requestCount('/off-task/page')).toBe(offRequests)
-    await expect(chrome.locator('#ontask-status-text')).toHaveText('On task', { timeout: 10000 })
   } finally {
     await app.close()
     await site.close()
@@ -80,9 +79,10 @@ test('resume restores the persisted focus session', async ({}, testInfo) => {
 
     app = await launchOnTask(userData, site.feedURL)
     chrome = await waitForPage(app, page => page.url() === 'min://app/index.html')
+    // resume is now a list of unfinished sessions; click the matching one
     await expect(chrome.locator('#ontask-intake-resume')).toBeVisible()
-    await expect(chrome.locator('#ontask-resume-task')).toHaveText('Resume this thesis')
-    await chrome.locator('#ontask-intake-resume').click()
+    await expect(chrome.locator('.ontask-resume-task').first()).toHaveText('Resume this thesis')
+    await chrome.locator('.ontask-resume-item').first().click()
     await expect(chrome.locator('#ontask-focus-task')).toHaveText('Resume this thesis')
     const resumed = await chrome.evaluate(function () {
       return require('electron').ipcRenderer.invoke('ontask-get-session')
