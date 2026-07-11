@@ -35,16 +35,33 @@ var ontaskDomReader = {
     return items.length
   },
 
-  // related feeds render asynchronously after load: retry on a short backoff
-  // (T2.3 replaces this with a MutationObserver for infinite scroll)
+  observer: null,
+  debounceTimer: null,
+
+  // batched + debounced re-collection: many DOM mutations fold into one run
+  scheduleRun: function () {
+    clearTimeout(ontaskDomReader.debounceTimer)
+    ontaskDomReader.debounceTimer = setTimeout(ontaskDomReader.run, 500)
+  },
+
+  observe: function () {
+    if (ontaskDomReader.observer) {
+      return
+    }
+    ontaskDomReader.observer = new MutationObserver(ontaskDomReader.scheduleRun)
+    ontaskDomReader.observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true
+    })
+  },
+
   start: function () {
     if (!ontaskActiveAdapter()) {
       return
     }
-    var delays = [1000, 3000, 6000, 10000]
-    delays.forEach(function (delay) {
-      setTimeout(ontaskDomReader.run, delay)
-    })
+    ontaskDomReader.run()
+    // picks up async-rendered and infinite-scroll cards (incl. SPA navigations)
+    ontaskDomReader.observe()
   }
 }
 
