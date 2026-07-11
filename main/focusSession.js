@@ -128,6 +128,7 @@ var focusSession = {
       task: focusSession.session.task,
       subtask: focusSession.session.subtask,
       keywords: focusSession.session.keywords,
+      expandedIntent: focusSession.session.expandedIntent,
       allowlist: focusSession.session.allowlist,
       overrides: focusSession.session.overrides,
       startedAt: focusSession.session.startedAt

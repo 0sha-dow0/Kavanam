@@ -132,7 +132,11 @@ const ontaskGroqClient = {
   // session start: task -> structured intent + keywords + seed domain allowlist (Q16)
   expandGoal: async function (task) {
     var content = await ontaskGroqClient.complete(
-      'You expand a user\'s work task into search intent for a focus tool. Respond with JSON only: ' +
+      'You expand a user\'s work task into search intent for a focus tool. ' +
+      'The task is typed by an individual person in their own web browser — interpret ambiguous ' +
+      'acronyms and shorthand as a person\'s personal task, not corporate jargon ' +
+      '(e.g. for a person, "sop" almost always means statement of purpose for university ' +
+      'applications, not standard operating procedure). Respond with JSON only: ' +
       '{"intent": "<one-sentence description of what content is relevant>", ' +
       '"keywords": ["..up to 12 short keywords/phrases.."], ' +
       '"domains": ["..up to 10 bare domains (no scheme) a person doing this task legitimately needs.."]}',

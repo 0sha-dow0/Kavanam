@@ -15,13 +15,27 @@ const ontaskNavigationGuard = {
   approvedNavigations: {},
   contentViews: new WeakSet(),
   authFlows: {},
+  openerURL: {}, // webContentsId -> URL of the page that opened this popup
+  pendingOpeners: {}, // url -> {opener, at} for link-clicks routed into new tabs
+
+  notePendingOpener: function (url, opener) {
+    if (url && opener) {
+      ontaskNavigationGuard.pendingOpeners[String(url)] = { opener: opener, at: Date.now() }
+    }
+  },
+
+  takePendingOpener: function (url) {
+    var record = ontaskNavigationGuard.pendingOpeners[String(url)]
+    delete ontaskNavigationGuard.pendingOpeners[String(url)]
+    return record && Date.now() - record.at < 15000 ? record.opener : null
+  },
 
   AUTH_HOSTS: [
     'accounts.google.com', 'appleid.apple.com', 'login.microsoftonline.com',
     'login.live.com', 'auth0.com', 'okta.com', 'id.atlassian.com',
     'login.yahoo.com', 'clerk.dev'
   ],
-  AUTH_PATTERN: /login|log-in|signin|sign-in|oauth|auth|sso|account|consent|challenge/i,
+  AUTH_PATTERN: /login|log-in|signin|sign-in|signup|sign-up|register|oauth|auth|sso|account|consent|challenge/i,
 
   SEARCH_HOSTS: [
     'google.com', 'duckduckgo.com', 'bing.com', 'startpage.com',
@@ -96,9 +110,14 @@ const ontaskNavigationGuard = {
       }
       return { allow: false, defer: true, reason: 'search-query' }
     }
-    // same-site movement is handled by the content surfaces, not nav blocking (Q21)
+    // same-site movement is handled by the content surfaces, not nav blocking (Q21).
+    // popups are born without a URL: judge them against their opener's page.
+    var effectiveCurrent = currentUrl
+    if (!effectiveCurrent || effectiveCurrent === 'about:blank') {
+      effectiveCurrent = (wc && g.openerURL[wc.id]) || g.takePendingOpener(url) || effectiveCurrent
+    }
     try {
-      var current = new URL(currentUrl)
+      var current = new URL(effectiveCurrent)
       if (g.registrable(current.hostname) === g.registrable(target.hostname)) {
         return { allow: true, reason: 'same-domain' }
       }
@@ -323,12 +342,15 @@ const ontaskNavigationGuard = {
     })
   },
 
-  register: function (wc) {
+  register: function (wc, openerURL) {
     var g = ontaskNavigationGuard
     if (!wc || g.contentViews.has(wc)) {
       return
     }
     g.contentViews.add(wc)
+    if (openerURL) {
+      g.openerURL[wc.id] = openerURL
+    }
     wc.on('will-navigate', function (event, url) {
       g.handleNavigation(wc, event, url)
     })
@@ -349,6 +371,7 @@ const ontaskNavigationGuard = {
       delete g.navigationTokens[wc.id]
       delete g.approvedNavigations[wc.id]
       delete g.authFlows[wc.id]
+      delete g.openerURL[wc.id]
       clearTimeout(g.subtaskTimers[wc.id])
     })
   }
@@ -396,6 +419,14 @@ ipc.on('ontask-primary-check', async function (e, payload) {
     if (isHub || isSiteSearch) {
       return
     }
+    // Groq endorsed these domains for this task: never page-block inside them
+    var sessionForAllowlist = focusSession.get()
+    var pageAllowlist = (sessionForAllowlist && sessionForAllowlist.allowlist) || []
+    if (pageAllowlist.some(function (d) { return ontaskNavigationGuard.hostMatches(targetURL.hostname, d) })) {
+      ontaskNavigationGuard.notifyChrome('ontask-page-status', { band: 'on', url: url })
+      ontaskNavigationGuard.lastOnTaskURL[wc.id] = url
+      return
+    }
   } catch (err) {
     return
   }
@@ -405,8 +436,14 @@ ipc.on('ontask-primary-check', async function (e, payload) {
   }
   var band = ontaskRelevanceEngine.band(score)
   console.log('ONTASK primary check:', band, score && score.toFixed(3), JSON.stringify(text.slice(0, 90)))
-  // ambiguous primary content is resolved decisively via the tiebreaker (Q8)
-  if (band === 'ambiguous' && ontaskGroqClient.available()) {
+  /*
+  Bouncing a whole page is the harshest intervention, and the local
+  embedding is unreliable on short page headers (a university admissions
+  page scored 0.036 against an SOP task). Every would-be block — off or
+  ambiguous — must be confirmed by Groq when it's available; without Groq,
+  only unambiguous junk (below the hard bar) blocks.
+  */
+  if ((band === 'off' || band === 'ambiguous') && ontaskGroqClient.available()) {
     try {
       var session = focusSession.get()
       var verdict = await ontaskGroqClient.tiebreak(session.task, session.expandedIntent, text)
@@ -416,10 +453,10 @@ ipc.on('ontask-primary-check', async function (e, payload) {
       band = verdict === 'on' ? 'on' : 'off'
       console.log('ONTASK primary tiebreak:', band)
     } catch (err) {
-      band = 'ambiguous'
+      band = 'ambiguous' // tiebreak outage: never block a page on a guess
     }
-  } else if (band === 'ambiguous') {
-    band = 'ambiguous'
+  } else if (band === 'off' && score >= ontaskRelevanceEngine.HARD_OFF) {
+    band = 'ambiguous' // degraded mode: mid-band pages stay, feeds still curate
   }
   ontaskNavigationGuard.notifyChrome('ontask-page-status', { band: band, url: url })
   if (band === 'off') {

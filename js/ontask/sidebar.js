@@ -38,6 +38,11 @@ const ontaskSidebar = {
         ontaskSidebar.taskEl.textContent = session.task
         ontaskSidebar.subtaskEl.textContent = session.subtask ? 'Now: ' + session.subtask : 'Getting started'
         ontaskSidebar.startedAt = session.startedAt
+        // show how the task was understood — a wrong reading should be
+        // visible immediately, not silently enforced all session
+        var intentEl = document.getElementById('ontask-focus-intent')
+        intentEl.textContent = session.expandedIntent ? 'Understood as: ' + session.expandedIntent : ''
+        intentEl.hidden = !session.expandedIntent
       } else {
         ontaskSidebar.taskEl.textContent = '—'
         ontaskSidebar.subtaskEl.textContent = 'No session'

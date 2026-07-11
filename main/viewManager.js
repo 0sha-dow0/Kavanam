@@ -93,9 +93,14 @@ function createView (existingViewId, id, webPreferences, boundsString, events) {
       when it is clicked.
       (https://github.com/minbrowser/min/issues/1835)
     */
+    // OnTask: a link opened from this page must be judged against THIS page,
+    // whether it becomes a popup or a new tab (new views have no URL yet)
+    const ontaskOpenerURL = view.webContents.getURL()
+
     if (details.url && details.url !== 'about:blank' && !details.features) {
       const eventTarget = getWindowFromViewContents(view.webContents) || windows.getCurrent()
 
+      ontaskNavigationGuard.notePendingOpener(details.url, ontaskOpenerURL)
       getWindowWebContents(eventTarget).send('view-event', {
         tabId: id,
         event: 'new-tab',
@@ -110,7 +115,7 @@ function createView (existingViewId, id, webPreferences, boundsString, events) {
       action: 'allow',
       createWindow: function (options) {
         const view = new WebContentsView({ webPreferences: getDefaultViewWebPreferences(), webContents: options.webContents })
-        ontaskNavigationGuard.register(view.webContents)
+        ontaskNavigationGuard.register(view.webContents, ontaskOpenerURL)
 
         var popupId = Math.random().toString()
         temporaryPopupViews[popupId] = view
