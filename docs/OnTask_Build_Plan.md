@@ -301,7 +301,7 @@ Tasks are labeled `T<phase>.<n>`. Phases must be done in order. Within reason, t
 ```
 Phase 0  [x] T0.1  [x] T0.2  [x] T0.3
 Phase 1  [x] T1.1  [x] T1.2  [x] T1.3  [x] T1.4
-Phase 2  [x] T2.1  [ ] T2.2  [ ] T2.3  [ ] T2.4
+Phase 2  [x] T2.1  [x] T2.2  [ ] T2.3  [ ] T2.4
 Phase 3  [ ] T3.1  [ ] T3.2  [ ] T3.3  [ ] T3.4  [ ] T3.5
 Phase 4  [ ] T4.1  [ ] T4.2  [ ] T4.3
 Phase 5  [ ] T5.1  [ ] T5.2  [ ] T5.3  [ ] T5.4

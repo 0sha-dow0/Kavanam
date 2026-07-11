@@ -12,6 +12,8 @@ const modules = [
   'js/preload/passwordFill.js',
   'js/preload/translate.js',
   'js/preload/adapters/youtube.js',
+  'js/preload/bridge.js',
+  'js/preload/domReader.js',
 ]
 
 function buildPreload() {
