@@ -343,6 +343,30 @@
 </div>
     </div>
 
+    <div id="ontask-intake" hidden>
+      <div class="ontask-intake-drag windowDragHandle"></div>
+      <div class="ontask-intake-inner">
+        <div class="ontask-wordmark">
+          <span class="ontask-focus-dot"></span>
+          OnTask
+        </div>
+        <h1 class="ontask-intake-question">What are you working on today?</h1>
+        <form id="ontask-intake-form">
+          <input
+            id="ontask-intake-input"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="e.g. Write my statement of purpose"
+          />
+          <button id="ontask-intake-start" type="submit">Start focus</button>
+        </form>
+        <p class="ontask-intake-hint">
+          One task per session. Everything off-task stays out of sight.
+        </p>
+      </div>
+    </div>
+
     <!-- add scripts in Gruntfile.js -->
 
     <script src="dist/bundle.js"></script>

@@ -1,0 +1,190 @@
+/* OnTask chrome styles — pastel Dia-style. Design tokens shared by intake, focus bar, and later chrome work. */
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('../css/fonts/PlusJakartaSans-latin.woff2') format('woff2');
+}
+
+:root {
+  --ot-font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --ot-ink: #3a3542;
+  --ot-ink-soft: #857e93;
+  --ot-card: rgba(255, 255, 255, 0.85);
+  --ot-accent: #6d5bd0;
+  --ot-accent-deep: #5a48bd;
+  --ot-accent-soft: #a594f9;
+  --ot-mint: #d9f2e6;
+  --ot-wash-base: #f7f4fb;
+  --ot-radius: 18px;
+  --ot-shadow-card: 0 18px 44px -18px rgba(109, 91, 208, 0.35);
+}
+
+/* ---------- intake screen ---------- */
+
+#ontask-intake {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--ot-font);
+  color: var(--ot-ink);
+  background: radial-gradient(
+      1100px 700px at 12% -10%,
+      #e6defa 0%,
+      rgba(230, 222, 250, 0) 60%
+    ),
+    radial-gradient(
+      900px 620px at 105% 12%,
+      #fbe7da 0%,
+      rgba(251, 231, 218, 0) 55%
+    ),
+    radial-gradient(
+      1000px 800px at 50% 115%,
+      #dcefe9 0%,
+      rgba(220, 239, 233, 0) 60%
+    ),
+    var(--ot-wash-base);
+}
+
+#ontask-intake[hidden] {
+  display: none;
+}
+
+.ontask-intake-drag {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 36px;
+}
+
+.ontask-intake-inner {
+  width: min(560px, calc(100vw - 96px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  /* optical centering: sit slightly above true center */
+  transform: translateY(-5vh);
+}
+
+.ontask-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--ot-ink-soft);
+  margin-bottom: 28px;
+}
+
+.ontask-focus-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: radial-gradient(
+    circle at 30% 30%,
+    var(--ot-accent-soft),
+    var(--ot-accent)
+  );
+  animation: ontask-dot-breathe 2.8s ease-in-out infinite;
+}
+
+@keyframes ontask-dot-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(109, 91, 208, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(109, 91, 208, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ontask-focus-dot {
+    animation: none;
+  }
+}
+
+.ontask-intake-question {
+  font-size: clamp(26px, 3.6vw, 34px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0 0 26px 0;
+}
+
+#ontask-intake-form {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 8px;
+  padding: 8px 8px 8px 20px;
+  background: var(--ot-card);
+  border: 1.5px solid rgba(109, 91, 208, 0.16);
+  border-radius: var(--ot-radius);
+  box-shadow: var(--ot-shadow-card);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+#ontask-intake-form:focus-within {
+  border-color: rgba(109, 91, 208, 0.55);
+}
+
+#ontask-intake-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--ot-font);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ot-ink);
+  padding: 12px 0;
+}
+
+#ontask-intake-input::placeholder {
+  color: #b3adc2;
+  font-weight: 400;
+}
+
+#ontask-intake-start {
+  border: none;
+  flex-shrink: 0;
+  font-family: var(--ot-font);
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--ot-accent);
+  padding: 12px 22px;
+  border-radius: calc(var(--ot-radius) - 6px);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+#ontask-intake-start:hover {
+  background: var(--ot-accent-deep);
+}
+
+#ontask-intake-start:active {
+  transform: scale(0.98);
+}
+
+#ontask-intake-start:focus-visible {
+  outline: 2px solid var(--ot-accent-deep);
+  outline-offset: 2px;
+}
+
+.ontask-intake-hint {
+  margin: 20px 0 0 4px;
+  font-size: 13.5px;
+  font-weight: 400;
+  color: var(--ot-ink-soft);
+}

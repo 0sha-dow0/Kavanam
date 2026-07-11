@@ -61,6 +61,11 @@ ipc.handle('ontask-get-session', function () {
   return focusSession.publicState()
 })
 
+ipc.handle('ontask-start-session', function (e, task) {
+  focusSession.start(task)
+  return focusSession.publicState()
+})
+
 if (process.argv.includes('--ontask-selftest')) {
   focusSession.start('selftest dummy task')
   console.log('ONTASK selftest read-back:', JSON.stringify(focusSession.publicState()))
