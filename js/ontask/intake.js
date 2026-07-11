@@ -47,9 +47,32 @@ const intake = {
     webviews.hidePlaceholder('ontaskIntake')
   },
 
+  /*
+  A NEW task starts on a clean slate: the previous task's tabs are its
+  context and must not carry over (resume keeps them — same task).
+  A fresh tab is added first so closing never hits the last-tab case.
+  */
+  resetWorkspace: function () {
+    try {
+      var browserUI = require('browserUI.js')
+      var oldTabs = tabs.get().map(function (tab) { return tab.id })
+      console.log('ONTASK intake: resetting workspace, closing ' + oldTabs.length + ' old tab(s)')
+      var fresh = tabs.add()
+      browserUI.addTab(fresh)
+      browserUI.switchToTab(fresh)
+      oldTabs.forEach(function (id) {
+        browserUI.destroyTab(id)
+      })
+      console.log('ONTASK intake: workspace reset, tabs now ' + tabs.get().length)
+    } catch (e) {
+      console.log('ONTASK intake: workspace reset failed', e.message)
+    }
+  },
+
   startSession: async function (task) {
     await ipc.invoke('ontask-start-session', task)
     console.log('ONTASK intake: session started with task:', task)
+    intake.resetWorkspace()
     intake.hide()
     window.dispatchEvent(new CustomEvent('ontask-session-changed'))
   },

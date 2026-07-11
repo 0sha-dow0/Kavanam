@@ -178,7 +178,9 @@ require('searchbar/bangsPlugin.js').initialize()
 require('searchbar/customBangs.js').initialize()
 require('searchbar/searchSuggestionsPlugin.js').initialize()
 require('searchbar/placeSuggestionsPlugin.js').initialize()
-require('searchbar/restoreTaskPlugin.js').initialize()
+// OnTask: Min's "return to previous task" suggestion would resurface the
+// previous focus task's tabs — one immutable task per session instead
+// require('searchbar/restoreTaskPlugin.js').initialize()
 require('searchbar/bookmarkManager.js').initialize()
 require('searchbar/historyViewer.js').initialize()
 require('searchbar/developmentModeNotification.js').initialize()
