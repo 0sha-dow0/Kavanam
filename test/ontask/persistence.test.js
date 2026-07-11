@@ -72,3 +72,33 @@ test('persists accumulated and currently active focus time', (t) => {
 
   assert.equal(persistence.getSession(openedAt).totalFocusMs, 15000)
 })
+
+test('completed sessions leave the resume list and retain analytics', (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'ontask-persistence-'))
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }))
+  const { persistence, handlers } = loadPersistence(directory)
+  const session = {
+    task: 'ship portfolio',
+    startedAt: Date.now() - 60000,
+    totalFocusMs: 30000,
+    currentFocusMs: 20000,
+    resumeCount: 2,
+    pauseCount: 1,
+    expandedIntent: 'Publish the finished portfolio',
+    keywords: ['portfolio'],
+    allowlist: [],
+    overrides: []
+  }
+
+  persistence.onSessionStart(session)
+  persistence.onSessionComplete(session)
+
+  assert.equal(handlers['ontask-get-sessions']().length, 0)
+  const completed = handlers['ontask-get-completed-sessions']()
+  assert.equal(completed.length, 1)
+  assert.equal(completed[0].task, 'ship portfolio')
+  assert.equal(completed[0].totalFocusMs, 50000)
+  assert.equal(completed[0].resumeCount, 2)
+  assert.equal(completed[0].pauseCount, 1)
+  assert.ok(completed[0].completedAt)
+})

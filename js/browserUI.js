@@ -51,7 +51,11 @@ function addTab (tabId = tabs.add(), options = {}) {
       focusWebview: options.enterEditMode === false
     })
     if (options.enterEditMode !== false) {
-      tabEditor.show(tabId)
+      if (isNewTab(tabs.get(tabId))) {
+        focusNewTabSearch()
+      } else {
+        tabEditor.show(tabId)
+      }
     }
   } else {
     tabBar.getTab(tabId).scrollIntoView()

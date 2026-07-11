@@ -128,6 +128,12 @@
           tabindex="-1"
         ></button>
         <button
+        id="reload-button"
+        class="navbar-action-button i carbon:renew"
+        data-label="reload"
+        tabindex="-1"
+      ></button>
+        <button
         id="forward-button"
         class="navbar-action-button i carbon:chevron-right"
         data-label="goForward"
@@ -165,8 +171,8 @@
             id="ontask-search-image"
             class="tab-editor-button ontask-search-action"
             type="button"
-            aria-label="Search by image"
-            title="Search by image"
+            aria-label="Search images"
+            title="Search images with DuckDuckGo"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <rect x="3" y="4" width="18" height="16" rx="2"></rect>
@@ -198,6 +204,19 @@
       </div>
       <button id="ontask-motivation-close" type="button" aria-label="Dismiss message">×</button>
     </div>
+
+    <section id="ontask-curation" hidden role="status" aria-live="polite">
+      <div class="ontask-curation-card">
+        <div class="ontask-curation-mark" aria-hidden="true">◎</div>
+        <div class="ontask-curation-copy">
+          <h2>Curating your recommendations</h2>
+          <p id="ontask-curation-count">Reviewing recommendations…</p>
+          <div class="ontask-curation-track" aria-hidden="true">
+            <div id="ontask-curation-progress"></div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <button
       id="switch-task-button"
@@ -254,7 +273,15 @@
         </button>
       </div>
       <div class="ontask-focus-card">
-        <div class="ontask-focus-label">◈ Today's focus</div>
+        <div class="ontask-focus-heading">
+          <div class="ontask-focus-label">◈ Today's focus</div>
+          <button id="ontask-session-menu-button" type="button" aria-label="Session options" aria-expanded="false">•••</button>
+          <div id="ontask-session-menu" hidden>
+            <button id="ontask-session-pause" type="button">Pause session</button>
+            <button id="ontask-session-edit" type="button">Edit prompt</button>
+            <button id="ontask-session-end" class="danger" type="button">End session</button>
+          </div>
+        </div>
         <div class="ontask-focus-goal" id="ontask-focus-task"></div>
         <div class="ontask-focus-sub">
           <span class="ontask-pulse"></span>
@@ -264,11 +291,6 @@
       </div>
       <div class="ontask-side-label">Open tabs</div>
       <div id="ontask-tab-slot"></div>
-      <div class="ontask-side-label ontask-allow-label">Allowed sites</div>
-      <div id="ontask-allowlist"></div>
-      <form id="ontask-allow-form">
-        <input id="ontask-allow-input" placeholder="add a domain…" autocomplete="off" spellcheck="false" />
-      </form>
       <div class="ontask-side-foot">
         <div class="ontask-timer">
           <div class="ontask-timer-current">
@@ -278,7 +300,7 @@
             Total time on task <span id="ontask-timer-total">0m</span>
           </div>
         </div>
-        <button id="ontask-end-btn">⏻ End focus session</button>
+        <button id="ontask-end-btn" type="button">← Back to tasks</button>
       </div>
     </div>
 
@@ -293,19 +315,37 @@
       </div>
       <img id="webview-placeholder" hidden aria-hidden="true" />
       <div id="ntp-content">
-          <img id="ntp-background" hidden>
-          <div id="ntp-background-controls">
-            <button id="ntp-image-remove"><i class="i carbon:trash-can"></i></button>
-            <button id="ntp-image-picker"><i class="i carbon:camera"></i></button>
-          </div>
+        <img id="ntp-background" hidden>
+        <div class="ntp-search-shell">
+          <div class="ntp-search-heading">Where do you want to focus?</div>
+          <form id="ntp-search-form" role="search">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="10.5" cy="10.5" r="6.5"></circle>
+              <path d="M15.5 15.5 21 21"></path>
+            </svg>
+            <input
+              id="ntp-search-input"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              aria-label="Search DuckDuckGo or enter a URL"
+              placeholder="Search DuckDuckGo or enter a URL"
+            />
+            <button type="submit">Search</button>
+          </form>
+        </div>
+        <div id="ntp-background-controls">
+          <button id="ntp-image-remove"><i class="i carbon:trash-can"></i></button>
+          <button id="ntp-image-picker"><i class="i carbon:camera"></i></button>
+        </div>
       </div>
     </div>
 
-    <section id="ontask-blocked" hidden role="status" aria-live="polite">
+    <section id="ontask-blocked" hidden role="dialog" aria-modal="true" aria-labelledby="ontask-blocked-title">
       <div class="ontask-blocked-card">
         <div class="ontask-blocked-mark" aria-hidden="true">!</div>
         <div class="ontask-blocked-eyebrow">Navigation paused</div>
-        <h2>This page is outside your focus</h2>
+        <h2 id="ontask-blocked-title">This page is outside your focus</h2>
         <p>
           <strong id="ontask-blocked-domain"></strong> does not appear to
           support your current task, so OnTask kept you on the page you were
@@ -313,7 +353,6 @@
         </p>
         <div class="ontask-blocked-actions">
           <button id="ontask-blocked-back" type="button">Back to task</button>
-          <button id="ontask-blocked-allow" type="button">Allow this site</button>
         </div>
       </div>
     </section>
@@ -328,6 +367,41 @@
           counted toward your task.
         </p>
         <button id="ontask-idle-resume" type="button">I'm here - resume focus</button>
+      </div>
+    </section>
+
+    <section id="ontask-manual-pause" hidden role="dialog" aria-modal="true" aria-labelledby="ontask-manual-pause-title">
+      <div class="ontask-idle-card">
+        <div class="ontask-idle-mark" aria-hidden="true">II</div>
+        <div class="ontask-idle-eyebrow">Tracking paused</div>
+        <h2 id="ontask-manual-pause-title">Task paused</h2>
+        <p>Your focused time is not increasing. Resume whenever you are ready to continue.</p>
+        <button id="ontask-manual-resume" type="button">Resume focus</button>
+      </div>
+    </section>
+
+    <section id="ontask-edit-prompt" hidden role="dialog" aria-modal="true" aria-labelledby="ontask-edit-title">
+      <form class="ontask-dialog-card" id="ontask-edit-form">
+        <div class="ontask-dialog-eyebrow">Refine your focus</div>
+        <h2 id="ontask-edit-title">Edit the current task</h2>
+        <p>The timer and task history will stay intact. OnTask will regenerate its relevance guidance.</p>
+        <input id="ontask-edit-input" type="text" autocomplete="off" spellcheck="false" aria-label="Edited task prompt" />
+        <div class="ontask-dialog-actions">
+          <button id="ontask-edit-cancel" type="button">Cancel</button>
+          <button class="primary" type="submit">Update task</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="ontask-end-confirm" hidden role="dialog" aria-modal="true" aria-labelledby="ontask-end-title">
+      <div class="ontask-dialog-card">
+        <div class="ontask-dialog-eyebrow">Complete task</div>
+        <h2 id="ontask-end-title">End tracking this task?</h2>
+        <p>Your focused time and completion details will be saved in completed tasks.</p>
+        <div class="ontask-dialog-actions">
+          <button id="ontask-end-cancel" type="button">Keep focusing</button>
+          <button id="ontask-end-confirm-button" class="danger" type="button">End and save</button>
+        </div>
       </div>
     </section>
 
@@ -492,6 +566,7 @@
           <div class="ontask-resume-heading">Continue an unfinished task</div>
           <div id="ontask-resume-list"></div>
         </section>
+        <button id="ontask-completed-open" type="button" hidden>View completed tasks</button>
         <div id="ontask-first-run" hidden>
           <p>
             OnTask keeps your task on your machine and decides most things
@@ -503,6 +578,17 @@
           <button id="ontask-first-run-ok" type="button">Got it</button>
         </div>
       </div>
+      <section id="ontask-completed-view" hidden aria-labelledby="ontask-completed-title">
+        <div class="ontask-completed-card">
+          <div class="ontask-completed-topline">
+            <button id="ontask-completed-close" type="button">← Back</button>
+            <span>Focus archive</span>
+          </div>
+          <h1 id="ontask-completed-title">With OnTask you completed</h1>
+          <div id="ontask-completed-stats"></div>
+          <div id="ontask-completed-list"></div>
+        </div>
+      </section>
     </div>
 
     <div id="ontask-balloons"></div>

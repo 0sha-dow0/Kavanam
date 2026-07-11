@@ -447,6 +447,20 @@ const ontaskRelevanceEngine = {
 
 /* ---------- IPC: scoring pipeline ---------- */
 
+const ontaskCurationRequests = {}
+
+function notifyCuration (record, phase) {
+  try {
+    ontaskNavigationGuard.notifyChrome('ontask-curation-progress', {
+      id: record.id,
+      url: record.url,
+      total: record.total,
+      completed: Object.keys(record.completed).length,
+      phase: phase
+    })
+  } catch (e) {}
+}
+
 ipc.on('ontask-cards-collected', function (e, payload) {
   var cleaned
   try {
@@ -459,6 +473,7 @@ ipc.on('ontask-cards-collected', function (e, payload) {
   var items = cleaned.items
   var pageURL = cleaned.url
   var pageContext = cleaned.context
+  var curationId = cleaned.curationId || (sender.id + '-' + Date.now())
   var requestRevision = ontaskRelevanceEngine.revision
   if (!items.length) {
     return
@@ -471,6 +486,47 @@ ipc.on('ontask-cards-collected', function (e, payload) {
         sender.send('ontask-verdicts', { url: pageURL, verdicts: verdicts })
       }
     } catch (err) {}
+
+    var record = ontaskCurationRequests[curationId]
+    if (!record) {
+      return
+    }
+    verdicts.forEach(function (verdict) {
+      if (verdict.verdict !== 'pending') {
+        record.completed[verdict.id] = true
+      }
+    })
+    var completed = Object.keys(record.completed).length
+    if (completed >= record.total) {
+      clearTimeout(record.expiryTimer)
+      record.expiryTimer = setTimeout(function () {
+        delete ontaskCurationRequests[curationId]
+      }, 5000)
+    }
+    notifyCuration(record, completed >= record.total ? 'complete' : 'progress')
+  }
+
+  function startCuration () {
+    if (!ontaskCurationRequests[curationId]) {
+      ontaskCurationRequests[curationId] = {
+        id: curationId,
+        url: pageURL,
+        total: 0,
+        completed: {},
+        expiryTimer: null,
+        notified: false
+      }
+    }
+    var record = ontaskCurationRequests[curationId]
+    record.total += items.length
+    clearTimeout(record.expiryTimer)
+    record.expiryTimer = setTimeout(function () {
+      delete ontaskCurationRequests[curationId]
+    }, 30000)
+    if (!record.notified) {
+      record.notified = true
+      notifyCuration(record, 'start')
+    }
   }
 
   if (!ontaskRelevanceEngine.enforcing()) {
@@ -483,6 +539,7 @@ ipc.on('ontask-cards-collected', function (e, payload) {
         if (!ontaskRelevanceEngine.enforcing()) {
           return
         }
+        startCuration()
         ontaskRelevanceEngine.scoreItems(items, push, pageURL, pageContext).then(push).catch(function () {
           push(items.map(function (it) { return { id: it.id, verdict: 'show' } }))
         })
@@ -491,6 +548,7 @@ ipc.on('ontask-cards-collected', function (e, payload) {
     return
   }
 
+  startCuration()
   ontaskRelevanceEngine.scoreItems(items, push, pageURL, pageContext).then(push).catch(function () {
     push(items.map(function (it) { return { id: it.id, verdict: 'show' } }))
   })

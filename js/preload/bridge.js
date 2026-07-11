@@ -33,11 +33,14 @@ var ontaskBridge = {
   },
 
   sendCards: function (items) {
+    var curationId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
     for (var i = 0; i < items.length; i += 50) {
       try {
         ipc.send('ontask-cards-collected', {
           url: ontaskBridge.currentURL(),
           context: ontaskBridge.pageContext(),
+          curationId: curationId,
+          total: items.length,
           items: items.slice(i, i + 50)
         })
       } catch (e) {

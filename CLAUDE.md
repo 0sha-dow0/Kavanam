@@ -1,60 +1,77 @@
-# CLAUDE.md — OnTask (Min fork)
+# OnTask (Min fork)
 
-OnTask is a focus browser built as a fork of Min (Electron). The user sets **one task per session**; a relevance engine scores content against it and enforces it on three surfaces: page content, navigation, and recommendation panels. Enforcement is **generic-first**: it works on any site out of the box; YouTube (watch, home, search) is the demo-tuned surface via an optional adapter, not the scope.
+Focus browser: one task per session, relevance engine scores content on three surfaces (page content, navigation, recommendation panels). Generic-first feed detection works on any site; YouTube is a demo adapter.
 
-## Authoritative docs (read these before making decisions)
+## Build & run
 
-- `docs/OnTask_Product_PRD.md` — what/why, all product decisions (Q-numbers). **When in doubt, this doc wins.**
-- `docs/OnTask_Architecture.md` — components, data model, data flows, failure behavior.
-- `docs/OnTask_Build_Plan.md` — the chunked task list (T<phase>.<n>). **Work ONE task at a time, in order.** Complete → test → commit with the task ID (e.g. `T3.2: local cosine scoring`) → continue automatically. HARD STOP only on: unfixable test failure, plan-vs-codebase conflict, or destructive steps.
+- `npm run start` — build + watch + Electron dev mode
+- `npm run startElectron` — launch after build
+- `npm test` — runs `test/ontask/*.test.js` (node --test). No separate lint.
+- Chrome reload: **Cmd+R doesn't work**; use `alt+ctrl+r` or restart Electron.
+- **No semicolons, 2-space indent** throughout.
 
-## Non-negotiable product rules
+## Build system (concatenation, not bundler)
 
-- The task is **immutable** for the session — no edit path mid-session.
-- **Fail open on outage** (engine broken → normal browser), **fail closed on ambiguity** (pending Groq tiebreaker → item stays hidden).
-- Bands: score ≥0.55 on-task · 0.40–0.55 ambiguous · <0.40 off-task. Score against both task and subtask, keep the higher.
-- Never claim "page content never leaves your device" — use the approved privacy wording in the Product PRD §6.8.
-- Auth/OAuth domains are always allowed by the navigation guard.
-- **Generic-first site model:** feed/section detection defaults to the generic extractor (repeated sibling/card structures, role="feed", articles, link-dense blocks — no hardcoded selectors), which must work on arbitrary sites. Per-site adapters are an optional precision layer resolved via `getAdapter(host)` (adapter wins only if it matches the host AND covers the current page). Everything outside feed/section detection stays site-agnostic. Broken adapter → fall back to generic; broken generic → silent no-op + dev log.
+- `scripts/buildMain.js` — file list → `main.build.js`. New main modules (e.g. `main/foo.js`) must be added here, ordered after deps.
+- `scripts/buildPreload.js` — file list → `dist/preload.js`. New preload modules must be added here.
+- `scripts/buildBrowser.js` — browserifies `js/default.js` → `dist/bundle.js`. Chrome modules use `require()`.
+- `scripts/buildBrowserStyles.js` — bundles `css/*.css`.
 
-## Running and building
+## Key files
 
-- `npm run start` — builds everything then runs watch + Electron dev mode concurrently. This is the live-dev loop; the watcher rebuilds on file changes.
-- `npm run startElectron` — just launch Electron (needs a prior build).
-- `npm test` — `standard` lint over `js/**/*.js main/*.js` (Min uses standard style: no semicolons, 2-space indent).
-- Reload the browser chrome after changes: **Cmd+R doesn't reload chrome**; use alt+ctrl+r (Min dev reload) or restart Electron. The watcher rebuilds bundles but Electron restart/reload is needed to pick them up.
+| Area | File | Purpose |
+|---|---|---|
+| Focus session | `main/focusSession.js` | Session lifecycle, pause/edit/leave, IPC handlers |
+| Relevance | `main/relevanceEngine.js` | Scoring, curation tracking (`ontaskCurationRequests`), IPC pipeline |
+| Groq | `main/groqClient.js` | LLM tiebreak for ambiguous items |
+| Navigation guard | `main/navigationGuard.js` | URL scoring, redirect-gate pass, host verification |
+| Persistence | `main/persistence.js` | Session save/restore, completed analytics |
+| IPC validation | `main/ontaskIPC.js` | `cleanItems`, `requireContent`, `cleanDomain`, rate limiting |
+| Preload bridge | `js/preload/bridge.js` | `sendCards` — chunks items (50/batch), sends `ontask-cards-collected` |
+| DOM reader | `js/preload/domReader.js` | Extracts cards/links from page |
+| Sidebar | `js/ontask/sidebar.js` | Collapsible rail, blocked overlay, session menu, curation popup, timer, idle |
+| Intake | `js/ontask/intake.js` | Landing page: resume list, completed archive, stats |
+| Nav bar | `js/navbar/navigationButtons.js` | Back/forward/reload buttons |
+| Nav bar | `js/navbar/tabEditor.js` | Address bar: search, voice, image buttons |
+| Chrome shell | `index.html` | All chrome DOM elements |
+| OnTask CSS | `css/ontask.css` | Full pastel theme, sidebar, blocked overlay, curation popup, etc. |
+| Base CSS | `css/tabBar.css` | Navbar buttons, tab bar, navigation button widths |
 
-## Min's build system — CRITICAL, non-obvious
+## Key IPC channels
 
-Min does **not** auto-discover source files. Bundles are built by concatenating explicit file lists in `scripts/`:
+| Channel | Direction | Purpose |
+|---|---|---|
+| `ontask-cards-collected` | preload→main | Card batches for scoring (max 50/batch) |
+| `ontask-verdicts` | main→preload | Show/hide verdicts per card |
+| `ontask-curation-progress` | main→chrome | Curation popup updates: `{id, url, total, completed, phase}` (start/progress/complete) |
+| `ontask-set-paused` | both | Pause/resume session |
+| `ontask-edit-session` | chrome→main | Edit task prompt |
+| `ontask-end-session`, `ontask-leave-session` | chrome→main | Complete/unfinished session |
+| `ontask-get-sessions`, `ontask-get-completed-sessions` | chrome→main | Session list |
+| `ontask-user-activity` | preload→main | Idle detection heartbeat |
 
-- `scripts/buildMain.js` — module list concatenated into `main.build.js` (the Electron main entry). **Any new main-process file (focusSession.js, relevanceEngine.js, groqClient.js, navigationGuard.js, …) must be added to this list**, ordered after its dependencies.
-- `scripts/buildPreload.js` — module list concatenated into `dist/preload.js` (injected into every page). **New preload modules (domReader.js, surfaceApplier.js, bridge.js) must be added here.**
-- `scripts/buildBrowser.js` — browserifies `js/default.js` (browser chrome UI) into `dist/bundle.js`. Chrome modules are `require`d from `js/default.js`-reachable code, with `paths: [rootDir, jsDir]`.
-- `scripts/buildBrowserStyles.js` — bundles `css/*.css`. New chrome CSS files must be registered where the existing ones are.
+## Curation popup lifecycle
 
-Because files are concatenated (main + preload), they share one scope — no `require` between concatenated modules in the same bundle; they see each other's top-level names. Match the existing style of neighboring files.
+1. `bridge.sendCards()` sends all items in batches of 50, each with `curationId` (same across batches) and `total` (full item count).
+2. `relevanceEngine.js` handler creates a curation record via `startCuration()` — accumulates `total` across all batches.
+3. `scoreItems()` scores locally, calls `push()` per chunk. Non-pending verdicts are counted in `record.completed`.
+4. `push()` calls `notifyCuration(record, phase)` — sends `ontask-curation-progress` to chrome.
+5. `sidebar.showCuration()` shows popup, updates progress bar and count text.
+6. When `completed >= record.total`: `push` sets 5s expiry timer; notifies 'complete'; chrome hides popup after 350-900ms.
+7. Record auto-deleted after 30s (or 5s post-complete). Switching tabs hides popup via `tasks.on('tab-selected')`.
 
-## Where things live (Min)
+**Curation tracking vulnerability (fixed):** `cleanItems` dedup removes duplicate items. Previously `payload.total` (raw count) was used as `record.total`, causing the popup to never complete when dedup occurred. Fix: use `items.length` (deduplicated) per batch and **accumulate** across batches in `startCuration()`.
 
-- `main/` — Electron main process (`main.js`, `viewManager.js` owns per-tab WebContentsViews, `filtering.js` is the request-level content blocker — extend for the navigation guard).
-- `js/preload/` — per-page preload modules (`default.js` sets up IPC helpers; `textExtractor.js` is a reference for reading page text).
-- `js/` — browser chrome renderer (tabs, navbar, searchbar). `index.html` is the chrome shell.
-- `css/` — chrome styles.
-- `js/util/settings/` — settings shared across processes.
+## CSS variables (pastel palette)
 
-## OnTask module layout (added as the plan progresses)
+`--ot-page: #dfe7e4` · `--ot-canvas: #e6ece8` · `--ot-sidebar-bg: #d5e0dc` · `--ot-ink: #2d3d3e` · `--ot-ink-soft: #627475` · `--ot-ink-faint: #8b9b9a` · `--ot-accent: #789da0` · `--ot-accent-strong: #4c7479` · `--ot-line: #cddad6` · `--ot-line-soft: #d9e3df`
 
-Per Architecture §11: main-process OnTask code in `main/` (focusSession.js, relevanceEngine.js, groqClient.js, navigationGuard.js, persistence.js), preload bridge in `js/preload/` (domReader.js, surfaceApplier.js, bridge.js, genericExtractor.js, adapterRegistry.js), optional site adapters in `js/preload/adapters/` (youtube.js), chrome UI in `js/` + `css/` following Min's existing patterns, bundled model in `models/minilm/`.
+## Key DOM element IDs
 
-## Conventions for this fork
-
-- Branch: `ontask`. One commit per completed task, message starts with the task ID.
-- Keep changes minimal and reversible; touch only files the current task lists.
-- Prefix OnTask logs with `ONTASK` so they're easy to grep in devtools/terminal.
-- Groq API key comes from env/config — never hardcode or commit it.
-- Performance budget: <150 ms added per navigation, <150 MB model RAM, no scroll jank (batch + debounce DOM scoring).
-
-## Known gaps
-
-- `ontask-pastel.html` (the styling source of truth for the pastel Dia-style chrome) was **not provided** with the docs. When a task needs it (T1.2+), ask the user for the file; if unavailable, design to the written description: pastel palette, Plus Jakarta Sans, intake screen, `.focus` card, vertical tab rail.
+- `#toolbar-navigation-buttons` — back/reload/forward container (width: 4rem, hover .can-go-forward: 6rem)
+- `#back-button`, `#reload-button`, `#forward-button` — nav buttons (.navbar-action-button .i carbon:*)
+- `#ontask-curation` — curation progress popup with `.ontask-curation-card`, `.ontask-curation-mark`, `.ontask-curation-track`, `#ontask-curation-progress`
+- `#ontask-search-submit`, `#ontask-search-voice`, `#ontask-search-image` — address bar actions
+- `#ontask-status-badge` — "On task" indicator in navbar
+- `#ontask-manual-pause` — pause overlay
+- `#ontask-edit-dialog`, `#ontask-end-confirm` — session dialogs

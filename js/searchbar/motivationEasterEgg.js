@@ -15,6 +15,7 @@ function createBalloons () {
   var count = 18 + Math.floor(Math.random() * 8)
   var viewportW = window.innerWidth
   var viewportH = window.innerHeight
+  var startY = viewportH + 60
 
   for (var i = 0; i < count; i++) {
     var balloon = document.createElement('div')
@@ -53,10 +54,8 @@ function createBalloons () {
     balloon.style.setProperty('--ontask-balloon-duration', duration + 's')
     balloon.style.setProperty('--ontask-balloon-delay', delay + 's')
     balloon.style.setProperty('--ontask-balloon-sway', swayX + 'px')
-    balloon.style.setProperty('--ontask-balloon-start-y', viewportH + 60 + 'px')
+    balloon.style.setProperty('--ontask-balloon-start-y', startY + 'px')
     balloon.style.setProperty('--ontask-balloon-end-y', -(120 + Math.random() * 160) + 'px')
-
-    var startY = viewportH + 60
 
     balloon.addEventListener('click', function (e) {
       var b = e.currentTarget
@@ -82,16 +81,36 @@ function createBalloons () {
   }, 8000)
 }
 
+function trigger () {
+  ontaskSidebar.showMotivation('Here you go — you\'ve got this. Keep going, one block at a time.')
+  createBalloons()
+}
+
+function check (text) {
+  return text.trim().toLowerCase() === 'i need some motivation'
+}
+
 function initialize () {
+  // URL handler intercepts searchbar.openURL calls
   searchbarPlugins.registerURLHandler(function (text) {
-    var match = text.trim().toLowerCase() === 'i need some motivation'
-    if (!match) {
-      return false
+    if (check(text)) {
+      trigger()
+      return true
     }
-    ontaskSidebar.showMotivation('Here you go — you\'ve got this. Keep going, one block at a time.')
-    createBalloons()
-    return true
+    return false
   })
+
+  // direct keydown intercept as a reliable fallback
+  var input = document.getElementById('tab-editor-input')
+  if (input) {
+    input.addEventListener('keydown', function (e) {
+      if (e.keyCode === 13 && check(input.value)) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        trigger()
+      }
+    })
+  }
 }
 
 module.exports = { initialize }

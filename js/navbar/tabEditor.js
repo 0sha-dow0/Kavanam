@@ -143,7 +143,17 @@ const tabEditor = {
     })
 
     tabEditor.imageButton.addEventListener('click', function (e) {
-      searchbar.openURL('https://lens.google.com/', e)
+      var value = tabEditor.input.value.trim()
+      var query = value
+      try {
+        query = new URL(value).searchParams.get('q') || ''
+      } catch (err) {}
+
+      var imageURL = 'https://duckduckgo.com/?ia=images&iax=images'
+      if (query && !urlParser.isPossibleURL(query)) {
+        imageURL += '&q=' + encodeURIComponent(query)
+      }
+      searchbar.openURL(imageURL, e)
     })
 
     tabEditor.input.addEventListener('input', function (e) {

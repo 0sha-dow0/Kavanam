@@ -19,6 +19,87 @@ body:not(.is-ntp) #ntp-content {
     object-fit: cover;
 }
 
+.ntp-search-shell {
+    position: absolute;
+    top: 38%;
+    left: 50%;
+    width: min(620px, calc(100% - 64px));
+    transform: translate(-50%, -50%);
+}
+
+.ntp-search-heading {
+    margin-bottom: 18px;
+    color: #344748;
+    font-size: 24px;
+    font-weight: 650;
+    letter-spacing: -0.025em;
+    text-align: center;
+}
+
+#ntp-search-form {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 56px;
+    padding: 7px 8px 7px 18px;
+    border: 1px solid rgba(76, 116, 121, 0.2);
+    border-radius: 18px;
+    background: #e6ece8;
+    box-shadow: 0 18px 46px -30px rgba(45, 61, 62, 0.7);
+}
+
+#ntp-search-form:focus-within {
+    border-color: #789da0;
+    box-shadow: 0 0 0 4px rgba(120, 157, 160, 0.12),
+        0 18px 46px -30px rgba(45, 61, 62, 0.7);
+}
+
+#ntp-search-form svg {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    fill: none;
+    stroke: #627475;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+}
+
+#ntp-search-input {
+    min-width: 0;
+    flex: 1;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #2d3d3e;
+    font: 500 15px "Plus Jakarta Sans", system-ui, sans-serif;
+}
+
+#ntp-search-input::placeholder {
+    color: #8b9b9a;
+}
+
+#ntp-search-form button {
+    align-self: stretch;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 12px;
+    background: #4c7479;
+    color: #dce7e3;
+    font: 700 12.5px "Plus Jakarta Sans", system-ui, sans-serif;
+    cursor: pointer;
+}
+
+#ntp-search-form button:hover {
+    background: #426a6f;
+}
+
+body.ontask-shell .ntp-search-shell {
+    margin-left: calc(var(--ot-sidebar-current-w) / 2);
+    width: min(620px, calc(100% - var(--ot-sidebar-current-w) - 64px));
+}
+
 #ntp-background-controls {
     position: absolute;
     bottom: 1em;
