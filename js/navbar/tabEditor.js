@@ -9,6 +9,10 @@ var contentBlockingToggle = require('navbar/contentBlockingToggle.js')
 const tabEditor = {
   container: document.getElementById('tab-editor'),
   input: document.getElementById('tab-editor-input'),
+  searchButton: document.getElementById('ontask-search-submit'),
+  voiceButton: document.getElementById('ontask-search-voice'),
+  imageButton: document.getElementById('ontask-search-image'),
+  voiceRecognition: null,
   star: null,
   isShown: false,
   show: function (tabId, editingValue, showSearchbar) {
@@ -92,6 +96,55 @@ const tabEditor = {
     tabEditor.container.appendChild(tabEditor.contentBlockingToggle)
 
     keyboardNavigationHelper.addToGroup('searchbar', tabEditor.container)
+
+    tabEditor.searchButton.addEventListener('click', function (e) {
+      var value = tabEditor.input.value.trim()
+      if (value) {
+        searchbar.openURL(value, e)
+      } else {
+        tabEditor.input.focus()
+      }
+    })
+
+    tabEditor.voiceButton.addEventListener('click', function () {
+      if (tabEditor.voiceRecognition) {
+        tabEditor.voiceRecognition.stop()
+        return
+      }
+      var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+      if (!SpeechRecognition) {
+        alert('Voice search is not available in this browser build.')
+        return
+      }
+      var recognition = new SpeechRecognition()
+      tabEditor.voiceRecognition = recognition
+      recognition.lang = navigator.language || 'en-US'
+      recognition.interimResults = false
+      recognition.maxAlternatives = 1
+      tabEditor.voiceButton.classList.add('listening')
+      tabEditor.voiceButton.title = 'Listening...'
+      recognition.onresult = function (event) {
+        var transcript = event.results[0][0].transcript.trim()
+        tabEditor.input.value = transcript
+        searchbar.showResults(transcript)
+        if (transcript) {
+          searchbar.openURL(transcript)
+        }
+      }
+      recognition.onerror = function () {
+        tabEditor.input.focus()
+      }
+      recognition.onend = function () {
+        tabEditor.voiceRecognition = null
+        tabEditor.voiceButton.classList.remove('listening')
+        tabEditor.voiceButton.title = 'Search by voice'
+      }
+      recognition.start()
+    })
+
+    tabEditor.imageButton.addEventListener('click', function (e) {
+      searchbar.openURL('https://lens.google.com/', e)
+    })
 
     tabEditor.input.addEventListener('input', function (e) {
       if (e.isComposing) {

@@ -17,6 +17,7 @@ const modules = [
   'js/preload/adapters/youtube.js',
   'js/preload/adapters/reddit.js',
   'js/preload/bridge.js',
+  'js/preload/activityTracker.js',
   'js/preload/domReader.js',
   'js/preload/surfaceApplier.js',
 ]

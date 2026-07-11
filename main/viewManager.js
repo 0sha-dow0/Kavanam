@@ -48,11 +48,12 @@ function createView (existingViewId, id, webPreferences, boundsString, events) {
     delete temporaryPopupViews[existingViewId]
 
     // the initial URL has already been loaded, so set the background color
-    view.setBackgroundColor('#fff')
+    view.setBackgroundColor('#dfe7e4')
     viewStateMap[id].loadedInitialURL = true
   } else {
     view = new WebContentsView({ webPreferences: viewPrefs })
   }
+  view.setBackgroundColor('#dfe7e4')
   ontaskNavigationGuard.register(view.webContents)
 
   events.forEach(function (event) {
@@ -376,7 +377,7 @@ function loadURLInView (id, url, win) {
   if (!viewStateMap[id].loadedInitialURL) {
     // Give the site a chance to display something before setting the background, in case it has its own dark theme
     viewMap[id].webContents.once('dom-ready', function() {
-      viewMap[id].setBackgroundColor('#fff')
+      viewMap[id].setBackgroundColor('#dfe7e4')
     })
     // If the view has no URL, it won't be attached yet
     if (win && id === windows.getState(win).selectedView) {
@@ -408,7 +409,7 @@ ipc.on('loadURLInView', function (e, args) {
       ontaskNavigationGuard.approveOnce(capturedContents, args.url)
       loadURLInView(args.id, args.url, win)
     } else {
-      ontaskNavigationGuard.notifyChrome('ontask-nav-blocked', { url: args.url })
+      ontaskNavigationGuard.notifyChrome('ontask-nav-blocked', { url: args.url, reason: decision.reason })
     }
   })
 })

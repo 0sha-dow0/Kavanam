@@ -7,13 +7,14 @@ place before the restored tab's view is shown.
 */
 
 var webviews = require('webviews.js')
+var tabEditor = require('navbar/tabEditor.js')
 
 const intake = {
   container: document.getElementById('ontask-intake'),
   form: document.getElementById('ontask-intake-form'),
   input: document.getElementById('ontask-intake-input'),
-  resumeButton: document.getElementById('ontask-intake-resume'),
-  resumeTask: document.getElementById('ontask-resume-task'),
+  resumeContainer: document.getElementById('ontask-intake-resume'),
+  resumeList: document.getElementById('ontask-resume-list'),
   firstRunCard: document.getElementById('ontask-first-run'),
   firstRunOk: document.getElementById('ontask-first-run-ok'),
 
@@ -24,12 +25,35 @@ const intake = {
     } catch (e) {
       // no tab selected yet at early startup; the request is still registered
     }
-    // offer resuming the previous session's task if one was persisted
-    ipc.invoke('ontask-get-last-session').then(function (lastSession) {
-      if (lastSession && !intake.container.hidden) {
-        intake.resumeTask.textContent = lastSession.task
-        intake.resumeButton.hidden = false
-      }
+    // offer every persisted session so unfinished work is not lost behind the latest task
+    ipc.invoke('ontask-get-sessions').then(function (sessions) {
+      intake.resumeList.innerHTML = ''
+      ;(sessions || []).forEach(function (session) {
+        var button = document.createElement('button')
+        button.className = 'ontask-resume-item'
+        button.type = 'button'
+
+        var task = document.createElement('span')
+        task.className = 'ontask-resume-task'
+        task.textContent = session.task
+
+        var meta = document.createElement('span')
+        meta.className = 'ontask-resume-meta'
+        meta.textContent = 'Last worked ' + new Date(session.updatedAt || session.startedAt).toLocaleString([], {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        })
+
+        button.appendChild(task)
+        button.appendChild(meta)
+        button.addEventListener('click', function () {
+          intake.onResume(session.startedAt)
+        })
+        intake.resumeList.appendChild(button)
+      })
+      intake.resumeContainer.hidden = !sessions || sessions.length === 0
     })
     // one short first-run card: fallibility + honest data statement (Q37)
     ipc.invoke('ontask-first-run').then(function (isFirstRun) {
@@ -45,6 +69,11 @@ const intake = {
   hide: function () {
     intake.container.hidden = true
     webviews.hidePlaceholder('ontaskIntake')
+
+    var selectedTab = tabs.get(tabs.getSelected())
+    if (selectedTab && (!selectedTab.url || selectedTab.url === 'min://newtab' || selectedTab.url === 'min://app/pages/newtab/index.html')) {
+      tabEditor.show(selectedTab.id)
+    }
   },
 
   /*
@@ -95,8 +124,8 @@ const intake = {
     intake.startSession(task)
   },
 
-  onResume: function () {
-    ipc.invoke('ontask-resume-session').then(function () {
+  onResume: function (startedAt) {
+    ipc.invoke('ontask-resume-session', startedAt).then(function () {
       console.log('ONTASK intake: previous session resumed')
       intake.sessionEverStarted = true
       intake.hide()
@@ -116,7 +145,6 @@ const intake = {
     })
 
     intake.form.addEventListener('submit', intake.onSubmit)
-    intake.resumeButton.addEventListener('click', intake.onResume)
     intake.firstRunOk.addEventListener('click', function () {
       ipc.send('ontask-first-run-done')
       intake.firstRunCard.hidden = true
