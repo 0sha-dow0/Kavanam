@@ -29,6 +29,7 @@ function loadStore () {
       onSessionEnd: () => {}
     },
     ontaskGroqClient: { available: () => false },
+    ontaskNavigationGuard: { isSearchEngineDomain: () => false },
     ontaskIPC: {
       requireChrome: () => {},
       requireContent: () => {},

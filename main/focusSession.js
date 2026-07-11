@@ -62,6 +62,10 @@ var focusSession = {
         } catch (e) {
           return
         }
+        // utility hosts (search engines) never get blanket trust
+        if (ontaskNavigationGuard.isSearchEngineDomain(clean)) {
+          return
+        }
         if (session.allowlist.indexOf(clean) === -1) {
           session.allowlist.push(clean)
         }
@@ -91,7 +95,9 @@ var focusSession = {
       keywords: [],
       subtask: null,
       subtaskEmbedding: null,
-      allowlist: Array.isArray(saved.allowlist) ? saved.allowlist.slice() : [],
+      allowlist: (Array.isArray(saved.allowlist) ? saved.allowlist : []).filter(function (d) {
+        return !ontaskNavigationGuard.isSearchEngineDomain(d)
+      }),
       overrides: Array.isArray(saved.overrides) ? saved.overrides.slice() : [],
       subtasks: [],
       approvedHosts: [],

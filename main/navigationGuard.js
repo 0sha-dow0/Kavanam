@@ -79,6 +79,17 @@ const ontaskNavigationGuard = {
     return hostname === domain || hostname.endsWith('.' + domain)
   },
 
+  // search engines are utilities, not destinations: their queries are
+  // already judged, so blanket-trusting the domain (e.g. via a Groq
+  // allowlist suggestion) would exempt everything else they host — games,
+  // doodles, feeds — from judgment
+  isSearchEngineDomain: function (domain) {
+    var g = ontaskNavigationGuard
+    return g.SEARCH_HOSTS.some(function (h) {
+      return g.hostMatches(domain, h) || g.hostMatches(h, domain)
+    })
+  },
+
   decide: function (url, currentUrl, wc) {
     var g = ontaskNavigationGuard
     if (!focusSession.isActive()) {
@@ -413,9 +424,11 @@ ipc.on('ontask-primary-check', async function (e, payload) {
   if (wc.getURL() !== url || ontaskNavigationGuard.authFlowActive(wc)) {
     return
   }
-  // never judge search/auth/internal pages as primary content
+  // never judge auth/internal pages as primary content. Search-engine
+  // hosts get no blanket pass: only their hub and actual search pages are
+  // exempt (below) — a game hosted on a search engine is still a page.
   var d = ontaskNavigationGuard.decide(url, url)
-  if (d.reason === 'auth' || d.reason === 'search' || d.reason === 'internal') {
+  if (d.reason === 'auth' || d.reason === 'internal') {
     return
   }
   // hub/landing pages and in-site search are tools, not content: their
