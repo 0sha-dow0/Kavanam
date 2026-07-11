@@ -5,6 +5,11 @@ var ipc = electron.ipcRenderer
 
 console.log('ONTASK preload alive', location.href)
 
+ipc.on('ontask-pong', function (e, data) {
+  console.log('ONTASK ipc round-trip:', data)
+})
+ipc.send('ontask-ping')
+
 var propertiesToClone = ['deltaX', 'deltaY', 'metaKey', 'ctrlKey', 'defaultPrevented', 'clientX', 'clientY']
 
 function cloneEvent (e) {

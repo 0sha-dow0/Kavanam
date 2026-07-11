@@ -458,6 +458,11 @@ ipc.on('quit', function () {
   app.quit()
 })
 
+ipc.on('ontask-ping', function (e) {
+  console.log('ONTASK main received ping from', e.sender.getURL())
+  e.sender.send('ontask-pong', 'pong')
+})
+
 ipc.on('tab-state-change', function(e, events) {
   const sourceWindowId = windows.windowFromContents(e.sender)?.id
   if (!sourceWindowId) {
