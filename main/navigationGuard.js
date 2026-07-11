@@ -112,6 +112,14 @@ const ontaskNavigationGuard = {
     if (g.authFlowActive(wc)) {
       return { allow: true, reason: 'auth-chain' }
     }
+    // redirect gates (captcha walls, login walls, consent pages) wrap a
+    // destination in a continue/redirect param. The wrapper itself is
+    // never content — let it through like an auth flow; the destination
+    // is judged on its own when navigation continues.
+    if (g.redirectTargetOf(target)) {
+      g.beginAuthFlow(wc)
+      return { allow: true, reason: 'redirect-gate' }
+    }
     // search engines are working tools — but the QUERY is judged, so the
     // results page can't become an off-task reading surface
     if (g.SEARCH_HOSTS.some(function (h) { return g.hostMatches(target.hostname, h) })) {
@@ -154,6 +162,18 @@ const ontaskNavigationGuard = {
       raw = decodeURIComponent(raw)
     } catch (e) {}
     return raw.replace(/[-+_/?=&.,%]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
+  },
+
+  REDIRECT_PARAMS: ['continue', 'redirect', 'redirect_uri', 'return', 'returnurl', 'next', 'dest', 'destination', 'url', 'u'],
+
+  redirectTargetOf: function (target) {
+    for (var i = 0; i < ontaskNavigationGuard.REDIRECT_PARAMS.length; i++) {
+      var value = target.searchParams.get(ontaskNavigationGuard.REDIRECT_PARAMS[i])
+      if (value && /^https?:\/\//i.test(value)) {
+        return value
+      }
+    }
+    return null
   },
 
   searchQueryOf: function (target) {
