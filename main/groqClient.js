@@ -1,7 +1,7 @@
 /*
 OnTask GroqClient — the only cloud dependency, used exactly twice:
 goal expansion at session start and the ambiguity tiebreaker.
-Key comes from GROQ_API_KEY or <userData>/ontask-groq-key.txt.
+Key comes from GROQ_API_KEY or Electron safeStorage.
 Unavailable/unreachable Groq degrades to local-only mode; it never crashes.
 */
 
@@ -9,15 +9,64 @@ const ontaskGroqClient = {
   keyCache: undefined,
   MODEL: 'llama-3.1-8b-instant',
 
+  secureKeyPath: function () {
+    return path.join(app.getPath('userData'), 'ontask-groq-key.enc')
+  },
+
+  legacyKeyPath: function () {
+    return path.join(app.getPath('userData'), 'ontask-groq-key.txt')
+  },
+
+  legacyKeyPaths: function () {
+    return [
+      ontaskGroqClient.legacyKeyPath(),
+      path.join(app.getPath('appData'), 'Min-development', 'ontask-groq-key.txt'),
+      path.join(app.getPath('appData'), 'Min', 'ontask-groq-key.txt')
+    ]
+  },
+
+  storeKey: function (key) {
+    if (!electron.safeStorage.isEncryptionAvailable()) {
+      return false
+    }
+    var encrypted = electron.safeStorage.encryptString(String(key).trim())
+    ontaskWriteFileAtomic.sync(ontaskGroqClient.secureKeyPath(), encrypted.toString('base64'), {
+      encoding: 'utf-8',
+      mode: 0o600
+    })
+    ontaskGroqClient.keyCache = String(key).trim()
+    return true
+  },
+
+  readStoredKey: function () {
+    if (!electron.safeStorage.isEncryptionAvailable()) {
+      return null
+    }
+    try {
+      var encoded = fs.readFileSync(ontaskGroqClient.secureKeyPath(), 'utf-8')
+      return electron.safeStorage.decryptString(Buffer.from(encoded, 'base64')).trim() || null
+    } catch (e) {
+      return null
+    }
+  },
+
   key: function () {
     if (ontaskGroqClient.keyCache !== undefined) {
       return ontaskGroqClient.keyCache
     }
-    var k = process.env.GROQ_API_KEY || null
-    if (!k) {
-      try {
-        k = fs.readFileSync(path.join(app.getPath('userData'), 'ontask-groq-key.txt'), 'utf-8').trim() || null
-      } catch (e) {}
+    var k = process.env.GROQ_API_KEY || ontaskGroqClient.readStoredKey()
+    if (!k && electron.safeStorage.isEncryptionAvailable()) {
+      ontaskGroqClient.legacyKeyPaths().some(function (legacyPath) {
+        try {
+          var legacy = fs.readFileSync(legacyPath, 'utf-8').trim()
+          if (legacy && ontaskGroqClient.storeKey(legacy)) {
+            fs.unlinkSync(legacyPath)
+            k = legacy
+            return true
+          }
+        } catch (e) {}
+        return false
+      })
     }
     ontaskGroqClient.keyCache = k
     return k
@@ -25,6 +74,24 @@ const ontaskGroqClient = {
 
   available: function () {
     return !!ontaskGroqClient.key()
+  },
+
+  status: function () {
+    if (process.env.GROQ_API_KEY) {
+      return { configured: true, source: 'environment' }
+    }
+    return { configured: !!ontaskGroqClient.key(), source: 'secure-storage' }
+  },
+
+  clearStoredKey: function () {
+    try {
+      fs.unlinkSync(ontaskGroqClient.secureKeyPath())
+    } catch (e) {
+      if (e.code !== 'ENOENT') {
+        throw e
+      }
+    }
+    ontaskGroqClient.keyCache = undefined
   },
 
   complete: async function (systemPrompt, userPrompt, expectJson) {
@@ -80,6 +147,25 @@ const ontaskGroqClient = {
     }
   },
 
+  // batched ambiguity tiebreaker: one call judges a whole chunk of items,
+  // instead of one request per item (which floods the API on wide feeds)
+  tiebreakBatch: async function (task, intent, items) {
+    var numbered = items.map(function (item, i) {
+      return (i + 1) + '. ' + String(item.text).slice(0, 200)
+    }).join('\n')
+    var content = await ontaskGroqClient.complete(
+      'You judge whether content items are relevant to the user\'s current task. ' +
+      'Respond with JSON only: {"verdicts": ["on" or "off", ...]} — exactly one entry per numbered item, in order.',
+      'Task: ' + task + (intent ? '\nTask intent: ' + intent : '') + '\nItems:\n' + numbered,
+      true
+    )
+    var parsed = JSON.parse(content)
+    var list = Array.isArray(parsed.verdicts) ? parsed.verdicts : []
+    return items.map(function (item, i) {
+      return { id: item.id, text: item.text, verdict: list[i] === 'on' ? 'on' : 'off' }
+    })
+  },
+
   // ambiguity tiebreaker (Q8): strict on/off verdict for one item
   tiebreak: async function (task, intent, itemText) {
     var content = await ontaskGroqClient.complete(
@@ -92,3 +178,25 @@ const ontaskGroqClient = {
     return parsed.verdict === 'on' ? 'on' : 'off'
   }
 }
+
+ipc.handle('ontask-groq-key-status', function (e) {
+  ontaskIPC.requireChrome(e)
+  return ontaskGroqClient.status()
+})
+
+ipc.handle('ontask-groq-key-set', function (e, value) {
+  ontaskIPC.requireChrome(e)
+  ontaskIPC.take(e, 'groq-key', 5, 60000)
+  var key = ontaskIPC.cleanText(value, 512, 10)
+  if (!/^[!-~]+$/.test(key) || !ontaskGroqClient.storeKey(key)) {
+    throw new Error('Secure key storage is unavailable')
+  }
+  return ontaskGroqClient.status()
+})
+
+ipc.handle('ontask-groq-key-clear', function (e) {
+  ontaskIPC.requireChrome(e)
+  ontaskIPC.take(e, 'groq-key', 5, 60000)
+  ontaskGroqClient.clearStoredKey()
+  return ontaskGroqClient.status()
+})

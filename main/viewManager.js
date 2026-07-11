@@ -1,5 +1,6 @@
 var viewMap = {} // id: view
 var viewStateMap = {} // id: view state
+var ontaskNavigationRequestTokens = {}
 
 var temporaryPopupViews = {} // id: view
 
@@ -52,6 +53,7 @@ function createView (existingViewId, id, webPreferences, boundsString, events) {
   } else {
     view = new WebContentsView({ webPreferences: viewPrefs })
   }
+  ontaskNavigationGuard.register(view.webContents)
 
   events.forEach(function (event) {
     view.webContents.on(event, function (e) {
@@ -108,6 +110,7 @@ function createView (existingViewId, id, webPreferences, boundsString, events) {
       action: 'allow',
       createWindow: function (options) {
         const view = new WebContentsView({ webPreferences: getDefaultViewWebPreferences(), webContents: options.webContents })
+        ontaskNavigationGuard.register(view.webContents)
 
         var popupId = Math.random().toString()
         temporaryPopupViews[popupId] = view
@@ -381,15 +384,28 @@ function loadURLInView (id, url, win) {
 
 ipc.on('loadURLInView', function (e, args) {
   const win = windows.windowFromContents(e.sender)?.win
-  // OnTask: address-bar navigations bypass will-navigate, so guard here too
-  const currentURL = viewMap[args.id] ? viewMap[args.id].webContents.getURL() : ''
-  const decision = ontaskNavigationGuard.decide(args.url, currentURL)
-  if (!decision.allow) {
-    console.log('ONTASK nav: BLOCK (addressbar,', decision.reason + ')', String(args.url).slice(0, 100))
-    ontaskNavigationGuard.notifyChrome('ontask-nav-blocked', { url: args.url })
+  const capturedView = viewMap[args.id]
+  if (!capturedView) {
     return
   }
-  loadURLInView(args.id, args.url, win)
+  const capturedContents = capturedView.webContents
+  const currentURL = capturedContents.getURL()
+  const token = (ontaskNavigationRequestTokens[args.id] || 0) + 1
+  ontaskNavigationRequestTokens[args.id] = token
+  ontaskNavigationGuard.resolve(args.url, currentURL, capturedContents).then(function (decision) {
+    const stillCurrent = ontaskNavigationRequestTokens[args.id] === token &&
+      viewMap[args.id] === capturedView && !capturedContents.isDestroyed()
+    if (!stillCurrent) {
+      return
+    }
+    console.log('ONTASK nav:', decision.allow ? 'allow' : 'BLOCK', '(addressbar, ' + decision.reason + ')', String(args.url).slice(0, 100))
+    if (decision.allow) {
+      ontaskNavigationGuard.approveOnce(capturedContents, args.url)
+      loadURLInView(args.id, args.url, win)
+    } else {
+      ontaskNavigationGuard.notifyChrome('ontask-nav-blocked', { url: args.url })
+    }
+  })
 })
 
 ipc.on('callViewMethod', function (e, data) {

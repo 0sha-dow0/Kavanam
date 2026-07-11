@@ -9,6 +9,7 @@ bridge. Dedupes by card id so re-collection only reports new cards.
 var ontaskDomReader = {
   seenIds: {},
   nodesById: {},
+  textById: {},
 
   collect: function () {
     var adapter = ontaskActiveAdapter()
@@ -22,10 +23,17 @@ var ontaskDomReader = {
         nodes = adapter.getRecommendationCards()
       }
     } catch (e) {
-      console.log('ONTASK extractor error (no-op):', e.message)
-      return []
+      console.log('ONTASK adapter error, using generic extractor:', e.message)
+      try {
+        adapter = ontaskGenericExtractor
+        nodes = adapter.getRecommendationCards()
+      } catch (genericError) {
+        console.log('ONTASK generic extractor error (no-op):', genericError.message)
+        return []
+      }
     }
     var items = []
+    var batchIds = {}
     nodes.forEach(function (node) {
       var id = null
       var text = null
@@ -36,9 +44,17 @@ var ontaskDomReader = {
       if (!id || !text) {
         return // unscoreable: left visible (Q12)
       }
-      // always refresh the node ref (SPA navigations replace nodes)
+      // two nodes can share an id on real pages (e.g. one author's link on
+      // two stories): only the first is tracked, later ones stay visible
+      if (batchIds[id]) {
+        return
+      }
+      batchIds[id] = true
+      var previousNode = ontaskDomReader.nodesById[id]
+      var previousText = ontaskDomReader.textById[id]
       ontaskDomReader.nodesById[id] = node
-      if (ontaskDomReader.seenIds[id]) {
+      ontaskDomReader.textById[id] = text
+      if (ontaskDomReader.seenIds[id] && previousNode === node && previousText === text) {
         return
       }
       ontaskDomReader.seenIds[id] = true
@@ -91,7 +107,12 @@ var ontaskDomReader = {
   },
 
   // primary-content judgment (Q15): is this page itself on-task?
-  primaryCheck: function () {
+  // SPA transitions leave stale titles around, so only judge once two
+  // consecutive samples agree and carry real signal (>= 4 words).
+  lastPrimaryText: null,
+
+  primaryCheck: function (attempt) {
+    attempt = attempt || 0
     try {
       var adapter = ontaskActiveAdapter()
       var text = null
@@ -101,9 +122,17 @@ var ontaskDomReader = {
       if (!text) {
         text = ontaskGenericExtractor.mainContentText()
       }
-      if (text && text.length >= 20) {
-        ontaskBridge.sendPrimaryCheck(text)
+      var usable = text && text.length >= 20 && text.split(' ').length >= 4
+      if (!usable || text !== ontaskDomReader.lastPrimaryText) {
+        ontaskDomReader.lastPrimaryText = usable ? text : null
+        if (attempt < 5) {
+          setTimeout(function () {
+            ontaskDomReader.primaryCheck(attempt + 1)
+          }, 1300)
+        }
+        return
       }
+      ontaskBridge.sendPrimaryCheck(text)
     } catch (e) {}
   },
 
@@ -113,7 +142,10 @@ var ontaskDomReader = {
     setTimeout(function check () {
       if (window.location.href !== ontaskDomReader.lastPrimaryURL) {
         ontaskDomReader.lastPrimaryURL = window.location.href
-        setTimeout(ontaskDomReader.primaryCheck, 2000) // let titles render
+        ontaskDomReader.lastPrimaryText = null
+        setTimeout(function () {
+          ontaskDomReader.primaryCheck(0)
+        }, 1800) // let titles render
       }
       setTimeout(check, 1500) // SPA navigations don't reload the page
     }, 2500)
@@ -124,7 +156,9 @@ var ontaskDomReader = {
     if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') {
       return
     }
-    ontaskDomReader.run()
+    ontaskBridge.getStatus(function () {
+      ontaskDomReader.run()
+    })
     // picks up async-rendered and infinite-scroll cards (incl. SPA navigations)
     ontaskDomReader.observe()
     ontaskDomReader.watchPrimary()

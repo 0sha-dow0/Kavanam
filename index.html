@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="script-src 'self'" />
 
-    <title>Min</title>
+    <title>OnTask</title>
 
     <link rel="stylesheet" href="dist/bundle.css" />
     <link rel="stylesheet" href="ext/icons/iconfont.css" />
@@ -209,11 +209,6 @@
       </div>
       <div class="ontask-side-label">Open tabs</div>
       <div id="ontask-tab-slot"></div>
-      <div class="ontask-side-label ontask-allow-label">Allowed sites</div>
-      <div id="ontask-allowlist"></div>
-      <form id="ontask-allow-form">
-        <input id="ontask-allow-input" placeholder="add a domain…" autocomplete="off" spellcheck="false" />
-      </form>
       <div class="ontask-side-foot">
         <div class="ontask-timer"><span>In focus</span><b id="ontask-timer-val">0m</b></div>
         <button id="ontask-end-btn">⏻ End focus session</button>
@@ -402,10 +397,11 @@
         </button>
         <div id="ontask-first-run" hidden>
           <p>
-            OnTask can be wrong sometimes — the interventions are the point.
-            It decides most things on your machine; to judge relevance it
-            sends your task and the titles of what's being checked to Groq.
-            No history harvesting, no ads, zero telemetry.
+            OnTask keeps your task on your machine and decides most things
+            locally. To judge whether something fits your task, it sends the
+            text it needs - your task and the titles and text of what's being
+            checked - to Groq. It does not send your full browsing history,
+            sell your data, show ads, or collect telemetry.
           </p>
           <button id="ontask-first-run-ok" type="button">Got it</button>
         </div>

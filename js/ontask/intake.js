@@ -25,9 +25,9 @@ const intake = {
       // no tab selected yet at early startup; the request is still registered
     }
     // offer resuming the previous session's task if one was persisted
-    ipc.invoke('ontask-get-last-task').then(function (lastTask) {
-      if (lastTask && !intake.container.hidden) {
-        intake.resumeTask.textContent = lastTask
+    ipc.invoke('ontask-get-last-session').then(function (lastSession) {
+      if (lastSession && !intake.container.hidden) {
+        intake.resumeTask.textContent = lastSession.task
         intake.resumeButton.hidden = false
       }
     })
@@ -65,7 +65,11 @@ const intake = {
   },
 
   onResume: function () {
-    intake.startSession(intake.resumeTask.textContent)
+    ipc.invoke('ontask-resume-session').then(function () {
+      console.log('ONTASK intake: previous session resumed')
+      intake.hide()
+      window.dispatchEvent(new CustomEvent('ontask-session-changed'))
+    })
   },
 
   initialize: function () {

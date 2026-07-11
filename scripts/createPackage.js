@@ -61,11 +61,19 @@ module.exports = function (platform, extraOptions) {
 
     await flipFuses(electronBinaryPath, {
       version: FuseVersion.V1,
+      [FuseV1Options.RunAsNode]: false,
+      [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
+      [FuseV1Options.EnableNodeCliInspectArguments]: false,
+      [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
+      [FuseV1Options.OnlyLoadAppFromAsar]: true,
       [FuseV1Options.GrantFileProtocolExtraPrivileges]: false
     })
   }
 
   const options = {
+    appId: 'com.ontask.browser',
+    executableName: 'ontask',
+    copyright: 'Copyright OnTask contributors',
     files: [
       '**/*',
       '!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}',
@@ -87,7 +95,20 @@ module.exports = function (platform, extraOptions) {
       '!**/node_modules/@types/',
       '!**/node_modules/pdfjs-dist/legacy',
       '!**/node_modules/pdfjs-dist/lib',
-      '!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}'
+      '!**/node_modules/@xenova/transformers/dist',
+      '!**/node_modules/@xenova/transformers/types',
+      ...(platform === 'mac' ? [
+        '!**/node_modules/onnxruntime-node/bin/napi-v3/linux',
+        '!**/node_modules/onnxruntime-node/bin/napi-v3/win32'
+      ] : platform === 'linux' ? [
+        '!**/node_modules/onnxruntime-node/bin/napi-v3/darwin',
+        '!**/node_modules/onnxruntime-node/bin/napi-v3/win32'
+      ] : [
+        '!**/node_modules/onnxruntime-node/bin/napi-v3/darwin',
+        '!**/node_modules/onnxruntime-node/bin/napi-v3/linux'
+      ]),
+      '!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}',
+      'PRIVACY.md'
     ],
     linux: {
       target: [
@@ -138,7 +159,11 @@ module.exports = function (platform, extraOptions) {
         schemes: ['file']
       }
     ],
-    asar: false,
+    asar: true,
+    asarUnpack: [
+      'models/**/*',
+      'node_modules/onnxruntime-node/**/*'
+    ],
     afterPack: afterPack,
     publish: null,
     /*

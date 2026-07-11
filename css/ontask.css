@@ -410,6 +410,66 @@ body.ontask-shell {
   border-color: var(--ot-accent);
 }
 
+.ontask-groq-label {
+  margin-top: 12px;
+}
+
+#ontask-groq-status {
+  padding: 0 8px 5px;
+  color: var(--ot-ink-soft);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+#ontask-groq-form {
+  display: flex;
+  gap: 5px;
+  padding: 0 4px;
+}
+
+#ontask-groq-input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid var(--ot-line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: var(--ot-canvas);
+  color: var(--ot-ink);
+  font: 500 11px var(--ot-font);
+}
+
+#ontask-groq-form button,
+#ontask-groq-remove {
+  border: 1px solid var(--ot-line);
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: var(--ot-canvas);
+  color: var(--ot-ink-soft);
+  font: 600 11px var(--ot-font);
+  cursor: pointer;
+}
+
+#ontask-groq-remove {
+  align-self: flex-start;
+  margin-left: 4px;
+}
+
+#ontask-privacy {
+  margin: 8px 8px 0;
+  color: var(--ot-ink-soft);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+#ontask-privacy summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+#ontask-privacy p {
+  margin-top: 5px;
+}
+
 .ontask-side-foot {
   margin-top: auto;
   padding-top: 14px;
@@ -502,8 +562,75 @@ body.ontask-shell #ontask-tab-slot .tab-item.active {
   box-shadow: inset 3px 0 0 var(--ot-accent);
 }
 
+body.ontask-shell #ontask-tab-slot .tab-item {
+  height: auto;
+  min-height: 38px;
+}
+
+body.ontask-shell #ontask-tab-slot .tab-item .tab-icon-area {
+  position: static;
+  display: flex;
+  align-items: center;
+  margin-right: 6px;
+  height: auto;
+}
+
+body.ontask-shell #ontask-tab-slot .tab-item .title-container {
+  position: static;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  height: auto;
+  align-items: center;
+}
+
 body.ontask-shell #ontask-tab-slot .tab-item .title {
   color: inherit;
+  position: static;
+  height: auto;
+  width: auto;
+  max-width: 100%;
+  line-height: 1.3;
+  padding: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.ontask-shell #ontask-tab-slot .tab-item .url-element {
+  display: none;
+}
+
+/* the tab editor becomes a floating command palette over the content area */
+body.ontask-shell #tab-editor {
+  position: fixed !important;
+  left: calc(var(--ot-sidebar-w) + 18px) !important;
+  right: auto !important;
+  top: 46px !important;
+  width: min(640px, calc(100vw - var(--ot-sidebar-w) - 36px)) !important;
+  height: auto !important;
+  padding: 4px 10px;
+  border-radius: var(--ot-r-md);
+  background: var(--ot-canvas);
+  border: 1px solid var(--ot-line);
+  box-shadow: 0 14px 44px -14px rgba(51, 43, 51, 0.35);
+  z-index: 40;
+  box-sizing: border-box;
+  font-family: var(--ot-font);
+}
+
+/* search suggestions dropdown follows the palette, not the window edge */
+body.ontask-shell #searchbar {
+  left: calc(var(--ot-sidebar-w) + 18px) !important;
+  width: min(640px, calc(100vw - var(--ot-sidebar-w) - 36px)) !important;
+  top: 100px !important;
+  border-radius: var(--ot-r-md);
+  border: 1px solid var(--ot-line);
+  background: var(--ot-canvas) !important;
+  color: var(--ot-ink) !important;
+  font-family: var(--ot-font);
+  box-shadow: 0 14px 44px -14px rgba(51, 43, 51, 0.35);
+  overflow: hidden;
 }
 
 /* ---------- navbar retheme (top toolbar, offset past the sidebar) ---------- */

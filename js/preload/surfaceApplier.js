@@ -8,8 +8,10 @@ offers the reversible "show anyway" (Q14) and the calm hidden-count.
 var ontaskSurfaceApplier = {
   STYLE_ID: 'ontask-style',
   hiddenIds: {},
-  revealed: false,
-  chip: null,
+  controls: {},
+  pendingSince: {},
+  PENDING_TIMEOUT: 20000,
+  watchdogTimer: null,
 
   ensureStyle: function () {
     if (document.getElementById(ontaskSurfaceApplier.STYLE_ID)) {
@@ -20,7 +22,9 @@ var ontaskSurfaceApplier = {
     style.textContent =
       '.ontask-pending { visibility: hidden !important; }' +
       '.ontask-hidden { display: none !important; }' +
-      'html.ontask-reveal .ontask-hidden { display: revert !important; opacity: .55; }'
+      '.ontask-override-control { margin:8px 0;padding:7px 12px;border:1px solid #EFE7E0;' +
+      'border-radius:999px;background:#fff;color:#847B85;cursor:pointer;font:600 12px system-ui; }' +
+      '.ontask-override-visible { opacity:.65 !important; }'
     var parent = document.head || document.documentElement
     if (parent) {
       parent.appendChild(style)
@@ -36,7 +40,35 @@ var ontaskSurfaceApplier = {
     if (node) {
       ontaskSurfaceApplier.ensureStyle()
       node.classList.add('ontask-pending')
+      ontaskSurfaceApplier.pendingSince[id] = Date.now()
+      ontaskSurfaceApplier.armWatchdog()
     }
+  },
+
+  /* a verdict can be lost (dropped batch, dying view): withheld items must
+     never stay invisible forever — reveal after a deadline (fail open) */
+  armWatchdog: function () {
+    if (ontaskSurfaceApplier.watchdogTimer) {
+      return
+    }
+    ontaskSurfaceApplier.watchdogTimer = setInterval(function () {
+      var now = Date.now()
+      var ids = Object.keys(ontaskSurfaceApplier.pendingSince)
+      if (!ids.length) {
+        clearInterval(ontaskSurfaceApplier.watchdogTimer)
+        ontaskSurfaceApplier.watchdogTimer = null
+        return
+      }
+      var expired = ids.filter(function (id) {
+        return now - ontaskSurfaceApplier.pendingSince[id] > ontaskSurfaceApplier.PENDING_TIMEOUT
+      })
+      if (expired.length) {
+        console.log('ONTASK pending verdicts timed out, revealing ' + expired.length + ' items')
+        ontaskSurfaceApplier.applyVerdicts(expired.map(function (id) {
+          return { id: id, verdict: 'show' }
+        }))
+      }
+    }, 5000)
   },
 
   applyVerdicts: function (verdicts) {
@@ -50,51 +82,54 @@ var ontaskSurfaceApplier = {
         node.classList.remove('ontask-pending')
         node.classList.remove('ontask-hidden')
         delete ontaskSurfaceApplier.hiddenIds[v.id]
+        delete ontaskSurfaceApplier.pendingSince[v.id]
+        ontaskSurfaceApplier.removeControl(v.id)
       } else if (v.verdict === 'hide') {
         node.classList.remove('ontask-pending')
         node.classList.add('ontask-hidden')
         ontaskSurfaceApplier.hiddenIds[v.id] = true
+        delete ontaskSurfaceApplier.pendingSince[v.id]
+        ontaskSurfaceApplier.ensureControl(v.id, node)
       } else if (v.verdict === 'pending') {
         node.classList.add('ontask-pending')
+        ontaskSurfaceApplier.pendingSince[v.id] = Date.now()
+        ontaskSurfaceApplier.armWatchdog()
       }
     })
-    ontaskSurfaceApplier.updateChip()
   },
 
   hiddenCount: function () {
     return Object.keys(ontaskSurfaceApplier.hiddenIds).length
   },
 
-  /* reversible one-click "show anyway" (Q14) */
-  updateChip: function () {
-    var count = ontaskSurfaceApplier.hiddenCount()
-    if (!count) {
-      if (ontaskSurfaceApplier.chip) {
-        ontaskSurfaceApplier.chip.remove()
-        ontaskSurfaceApplier.chip = null
-      }
+  removeControl: function (id) {
+    var control = ontaskSurfaceApplier.controls[id]
+    if (control) {
+      control.remove()
+      delete ontaskSurfaceApplier.controls[id]
+    }
+  },
+
+  /* Reversible, item-scoped override. One mistake never reveals the feed. */
+  ensureControl: function (id, node) {
+    if (ontaskSurfaceApplier.controls[id] || !node.parentNode) {
       return
     }
-    if (!ontaskSurfaceApplier.chip) {
-      var chip = document.createElement('button')
-      chip.id = 'ontask-chip'
-      chip.style.cssText =
-        'position:fixed;bottom:18px;right:18px;z-index:2147483647;' +
-        'display:flex;align-items:center;gap:7px;padding:9px 15px;border:1px solid #EFE7E0;' +
-        'border-radius:999px;background:#FFFFFF;color:#847B85;cursor:pointer;' +
-        "font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:12.5px;font-weight:600;" +
-        'box-shadow:0 6px 22px -8px rgba(51,43,51,.25);'
-      chip.addEventListener('click', function () {
-        ontaskSurfaceApplier.revealed = !ontaskSurfaceApplier.revealed
-        document.documentElement.classList.toggle('ontask-reveal', ontaskSurfaceApplier.revealed)
-        ontaskSurfaceApplier.updateChip()
-      })
-      document.documentElement.appendChild(chip)
-      ontaskSurfaceApplier.chip = chip
-    }
-    ontaskSurfaceApplier.chip.textContent = ontaskSurfaceApplier.revealed
-      ? 'Hide off-task again'
-      : count + ' off-task hidden · show anyway'
+    var control = document.createElement('button')
+    control.className = 'ontask-override-control'
+    control.textContent = 'Off-task item hidden - show anyway'
+    control.addEventListener('click', function () {
+      var revealed = node.classList.contains('ontask-hidden')
+      node.classList.toggle('ontask-hidden', !revealed)
+      node.classList.toggle('ontask-override-visible', revealed)
+      control.textContent = revealed ? 'Hide off-task item again' : 'Off-task item hidden - show anyway'
+      ipc.invoke(revealed ? 'ontask-override-add' : 'ontask-override-remove', {
+        page: window.location.href,
+        id: id
+      }).catch(function () {})
+    })
+    node.parentNode.insertBefore(control, node)
+    ontaskSurfaceApplier.controls[id] = control
   },
 
   /* session end: un-hide everything, forget state (Q40) */
@@ -107,9 +142,9 @@ var ontaskSurfaceApplier = {
       }
     })
     ontaskSurfaceApplier.hiddenIds = {}
-    ontaskSurfaceApplier.revealed = false
-    document.documentElement.classList.remove('ontask-reveal')
-    ontaskSurfaceApplier.updateChip()
+    ontaskSurfaceApplier.pendingSince = {}
+    Object.keys(ontaskSurfaceApplier.controls).forEach(ontaskSurfaceApplier.removeControl)
+    ontaskSurfaceApplier.controls = {}
   }
 }
 

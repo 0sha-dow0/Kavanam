@@ -1,9 +1,10 @@
 /*
 OnTask sidebar — the app shell from ontask-pastel.html.
 Hosts the brand, the pinned focus card (task + live subtask), Min's tab
-strip (moved here as a vertical rail), the session allowlist editor, the
-focus timer, and the end-session control. Reserves horizontal view space
-via webviews.adjustMargin.
+strip (moved here as a vertical rail), the focus timer, and the
+end-session control. The session allowlist is seeded by Groq and applied
+invisibly — no user-facing editor, so it can't be used to self-bypass.
+Reserves horizontal view space via webviews.adjustMargin.
 */
 
 var webviews = require('webviews.js')
@@ -15,32 +16,10 @@ const ontaskSidebar = {
   taskEl: document.getElementById('ontask-focus-task'),
   subtaskEl: document.getElementById('ontask-focus-subtask'),
   timerEl: document.getElementById('ontask-timer-val'),
-  allowlistEl: document.getElementById('ontask-allowlist'),
-  allowForm: document.getElementById('ontask-allow-form'),
-  allowInput: document.getElementById('ontask-allow-input'),
   endButton: document.getElementById('ontask-end-btn'),
   statusBadge: document.getElementById('ontask-status-badge'),
   statusText: document.getElementById('ontask-status-text'),
   startedAt: null,
-
-  renderAllowlist: function (allowlist) {
-    ontaskSidebar.allowlistEl.innerHTML = ''
-    ;(allowlist || []).forEach(function (domain) {
-      var item = document.createElement('div')
-      item.className = 'ontask-allow-item'
-      var name = document.createElement('span')
-      name.textContent = domain
-      var remove = document.createElement('button')
-      remove.textContent = '×'
-      remove.title = 'Remove ' + domain
-      remove.addEventListener('click', function () {
-        ipc.invoke('ontask-allowlist-remove', domain).then(ontaskSidebar.renderAllowlist)
-      })
-      item.appendChild(name)
-      item.appendChild(remove)
-      ontaskSidebar.allowlistEl.appendChild(item)
-    })
-  },
 
   updateTimer: function () {
     if (!ontaskSidebar.startedAt) {
@@ -59,27 +38,45 @@ const ontaskSidebar = {
         ontaskSidebar.taskEl.textContent = session.task
         ontaskSidebar.subtaskEl.textContent = session.subtask ? 'Now: ' + session.subtask : 'Getting started'
         ontaskSidebar.startedAt = session.startedAt
-        ontaskSidebar.renderAllowlist(session.allowlist)
       } else {
         ontaskSidebar.taskEl.textContent = '—'
         ontaskSidebar.subtaskEl.textContent = 'No session'
         ontaskSidebar.startedAt = null
-        ontaskSidebar.renderAllowlist([])
         ontaskSidebar.statusBadge.hidden = true
       }
       ontaskSidebar.updateTimer()
     })
   },
 
+  currentBand: null,
+  blockedFlashTimer: null,
+
   setPageStatus: function (band) {
+    clearTimeout(ontaskSidebar.blockedFlashTimer)
+    ontaskSidebar.currentBand = band
+    ontaskSidebar.renderStatus(band, false)
+  },
+
+  renderStatus: function (band, blockedFlash) {
     if (!band) {
       ontaskSidebar.statusBadge.hidden = true
+      ontaskSidebar.statusText.textContent = ''
       return
     }
     ontaskSidebar.statusBadge.hidden = false
     var off = band === 'off'
+    var pending = band === 'ambiguous' || band === 'pending'
     ontaskSidebar.statusBadge.classList.toggle('off', off)
-    ontaskSidebar.statusText.textContent = off ? 'Off task' : 'On task'
+    ontaskSidebar.statusText.textContent = blockedFlash ? 'Blocked' : off ? 'Off task' : pending ? 'Checking' : 'On task'
+  },
+
+  // a block is an event, not a state: flash it, then show the page's real band
+  flashBlocked: function () {
+    clearTimeout(ontaskSidebar.blockedFlashTimer)
+    ontaskSidebar.renderStatus('off', true)
+    ontaskSidebar.blockedFlashTimer = setTimeout(function () {
+      ontaskSidebar.renderStatus(ontaskSidebar.currentBand, false)
+    }, 2500)
   },
 
   initialize: function () {
@@ -98,24 +95,13 @@ const ontaskSidebar = {
       })
     })
 
-    ontaskSidebar.allowForm.addEventListener('submit', function (e) {
-      e.preventDefault()
-      var domain = ontaskSidebar.allowInput.value.trim()
-      if (domain) {
-        ipc.invoke('ontask-allowlist-add', domain).then(function (allowlist) {
-          ontaskSidebar.allowInput.value = ''
-          ontaskSidebar.renderAllowlist(allowlist)
-        })
-      }
-    })
-
     // main-process pushes (goal expansion, subtask updates)
     ipc.on('ontask-session-changed', ontaskSidebar.refresh)
     ipc.on('ontask-page-status', function (e, data) {
       ontaskSidebar.setPageStatus(data && data.band)
     })
     ipc.on('ontask-nav-blocked', function (e, data) {
-      ontaskSidebar.setPageStatus('off')
+      ontaskSidebar.flashBlocked()
       console.log('ONTASK chrome: navigation blocked', data && data.url)
     })
 

@@ -8,6 +8,13 @@ var focusSession = {
   session: null,
 
   start: function (task) {
+    if (focusSession.session) {
+      throw new Error('A focus session is already active')
+    }
+    task = String(task || '').trim()
+    if (!task) {
+      throw new Error('A focus task is required')
+    }
     focusSession.session = {
       task: task,
       taskEmbedding: null,
@@ -41,6 +48,7 @@ var focusSession = {
           }
         })
         ontaskPersistence.onSessionUpdate(startedSession)
+        ontaskRelevanceEngine.onGoalExpanded(startedSession)
         console.log('ONTASK goal expanded:', JSON.stringify({ intent: expansion.intent, keywords: expansion.keywords, allowlist: startedSession.allowlist }))
         try {
           sendIPCToWindow(windows.getCurrent(), 'ontask-session-changed', {})
@@ -51,6 +59,30 @@ var focusSession = {
     } else {
       console.log('ONTASK no Groq key — local-only degraded mode')
     }
+    return focusSession.session
+  },
+
+  resume: function (saved) {
+    if (focusSession.session) {
+      throw new Error('A focus session is already active')
+    }
+    if (!saved || typeof saved.task !== 'string' || !saved.task.trim()) {
+      throw new Error('No focus session is available to resume')
+    }
+    focusSession.session = {
+      task: saved.task.trim(),
+      taskEmbedding: null,
+      expandedIntent: null,
+      keywords: [],
+      subtask: null,
+      subtaskEmbedding: null,
+      allowlist: Array.isArray(saved.allowlist) ? saved.allowlist.slice() : [],
+      overrides: Array.isArray(saved.overrides) ? saved.overrides.slice() : [],
+      startedAt: Number(saved.startedAt) || Date.now()
+    }
+    ontaskPersistence.onSessionUpdate(focusSession.session)
+    ontaskRelevanceEngine.onSessionStart(focusSession.session.task)
+    console.log('ONTASK session resumed:', focusSession.session.task)
     return focusSession.session
   },
 
@@ -93,31 +125,77 @@ var focusSession = {
       subtask: focusSession.session.subtask,
       keywords: focusSession.session.keywords,
       allowlist: focusSession.session.allowlist,
+      overrides: focusSession.session.overrides,
       startedAt: focusSession.session.startedAt
     }
   }
 }
 
-ipc.handle('ontask-get-session', function () {
+ipc.handle('ontask-get-session', function (e) {
+  ontaskIPC.requireChrome(e)
   return focusSession.publicState()
 })
 
 ipc.handle('ontask-start-session', function (e, task) {
-  focusSession.start(task)
+  ontaskIPC.requireChrome(e)
+  ontaskIPC.take(e, 'session', 5, 60000)
+  focusSession.start(ontaskIPC.cleanTask(task))
   return focusSession.publicState()
 })
 
-ipc.handle('ontask-end-session', function () {
+ipc.handle('ontask-resume-session', function (e) {
+  ontaskIPC.requireChrome(e)
+  ontaskIPC.take(e, 'session', 5, 60000)
+  focusSession.resume(ontaskPersistence.getLastSession())
+  return focusSession.publicState()
+})
+
+ipc.handle('ontask-end-session', function (e) {
+  ontaskIPC.requireChrome(e)
+  ontaskIPC.take(e, 'session', 5, 60000)
   focusSession.end()
   return null
 })
 
-ipc.handle('ontask-first-run', function () {
+ipc.handle('ontask-override-add', function (e, record) {
+  ontaskIPC.take(e, 'override', 30, 60000)
+  record = ontaskIPC.cleanOverride(e, record)
+  var session = focusSession.get()
+  if (!session || !record || !record.page || !record.id) {
+    return false
+  }
+  var exists = session.overrides.some(function (item) {
+    return item.page === record.page && item.id === record.id
+  })
+  if (!exists) {
+    session.overrides.push({ page: String(record.page), id: String(record.id) })
+    ontaskPersistence.onSessionUpdate(session)
+  }
+  return true
+})
+
+ipc.handle('ontask-override-remove', function (e, record) {
+  ontaskIPC.take(e, 'override', 30, 60000)
+  record = ontaskIPC.cleanOverride(e, record)
+  var session = focusSession.get()
+  if (!session || !record) {
+    return false
+  }
+  session.overrides = session.overrides.filter(function (item) {
+    return item.page !== record.page || item.id !== record.id
+  })
+  ontaskPersistence.onSessionUpdate(session)
+  return true
+})
+
+ipc.handle('ontask-first-run', function (e) {
+  ontaskIPC.requireChrome(e)
   ontaskPersistence.load()
   return !ontaskPersistence.data.firstRunDone
 })
 
-ipc.on('ontask-first-run-done', function () {
+ipc.on('ontask-first-run-done', function (e) {
+  ontaskIPC.requireChrome(e)
   ontaskPersistence.load()
   ontaskPersistence.data.firstRunDone = true
   ontaskPersistence.save()

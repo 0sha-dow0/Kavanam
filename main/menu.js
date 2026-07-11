@@ -425,30 +425,12 @@ function buildAppMenu (options = {}) {
             openTabInWindow('https://github.com/minbrowser/min/wiki#keyboard-shortcuts')
           }
         },
-        {
-          label: l('appMenuReportBug'),
-          click: function () {
-            openTabInWindow('https://github.com/minbrowser/min/issues/new')
-          }
-        },
-        {
-          label: l('appMenuTakeTour'),
-          click: function () {
-            openTabInWindow('https://minbrowser.github.io/min/tour/')
-          }
-        },
-        {
-          label: l('appMenuViewGithub'),
-          click: function () {
-            openTabInWindow('https://github.com/minbrowser/min')
-          }
-        },
         ...(process.platform !== 'darwin' ? [{ type: 'separator' }] : []),
         ...(process.platform !== 'darwin' ? [{
           label: l('appMenuAbout').replace('%n', app.name),
           click: function (item, window) {
             var info = [
-              'Min v' + app.getVersion(),
+              'OnTask v' + app.getVersion(),
               'Chromium v' + process.versions.chrome
             ]
             electron.dialog.showMessageBox({

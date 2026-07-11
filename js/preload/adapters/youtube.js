@@ -61,7 +61,9 @@ var ontaskYouTubeAdapter = {
         // broken selector: silent no-op on this surface (Q29)
       }
     })
-    return nodes
+    return nodes.filter(function (node, index) {
+      return nodes.indexOf(node) === index
+    })
   },
 
   // stable id: the video id from the card's /watch link
@@ -88,6 +90,7 @@ var ontaskYouTubeAdapter = {
     }
     var title = document.querySelector('ytd-watch-metadata h1, h1.ytd-watch-metadata, #title h1')
     var channel = document.querySelector('ytd-watch-metadata #channel-name, #owner #channel-name')
+    var description = document.querySelector('ytd-watch-metadata #description-inline-expander, #description #content')
     var parts = []
     if (title) {
       parts.push(title.textContent || '')
@@ -95,40 +98,81 @@ var ontaskYouTubeAdapter = {
     if (channel) {
       parts.push(channel.textContent || '')
     }
+    if (description) {
+      parts.push(description.textContent || '')
+    }
     if (!parts.length) {
       return null
     }
     return parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 400)
   },
 
-  /* autoplay interception (Q24): when a video ends, judge the queued next
-     target; off-task -> cancel the countdown and pause. The navigation
-     guard's primary-content check is the backstop if it slips through. */
+  autoplayTarget: null,
+  autoplayVerdict: null,
+  autoplayBusy: false,
+
+  nextTarget: function () {
+    var next = document.querySelector('a.ytp-next-button')
+    if (!next || !next.href) {
+      return null
+    }
+    var upcoming = document.querySelector(
+      '.ytp-autonav-endscreen-upcoming-container, .ytp-upnext, ytd-compact-autoplay-renderer'
+    )
+    var text = upcoming ? upcoming.textContent : ''
+    text = (text || next.getAttribute('aria-label') || next.title || next.href).replace(/\s+/g, ' ').trim()
+    return { id: next.href, text: text }
+  },
+
+  preflightAutoplay: function () {
+    var target = ontaskYouTubeAdapter.nextTarget()
+    if (!target || ontaskYouTubeAdapter.autoplayBusy ||
+        (target.id === ontaskYouTubeAdapter.autoplayTarget && ontaskYouTubeAdapter.autoplayVerdict)) {
+      return
+    }
+    ontaskYouTubeAdapter.autoplayTarget = target.id
+    ontaskYouTubeAdapter.autoplayVerdict = null
+    ontaskYouTubeAdapter.autoplayBusy = true
+    ontaskBridge.finalVerdict(target.id, target.text).then(function (verdict) {
+      if (ontaskYouTubeAdapter.autoplayTarget === target.id) {
+        ontaskYouTubeAdapter.autoplayVerdict = verdict
+      }
+    }).catch(function () {
+      ontaskYouTubeAdapter.autoplayVerdict = 'show'
+    }).finally(function () {
+      ontaskYouTubeAdapter.autoplayBusy = false
+    })
+  },
+
+  stopAutoplay: function (video) {
+    var cancel = document.querySelector(
+      '.ytp-autonav-endscreen-upcoming-cancel-button, .ytp-upnext-cancel-button, .ytp-autonav-endscreen-button-container button'
+    )
+    if (cancel) {
+      cancel.click()
+    }
+    try {
+      video.pause()
+    } catch (err) {}
+  },
+
+  /* Preflight before the video ends. Pending ambiguity remains blocked; a
+     scoring outage resolves to show in the main process. */
   init: function () {
+    document.addEventListener('timeupdate', function (e) {
+      if (e.target && e.target.tagName === 'VIDEO' && e.target.duration - e.target.currentTime < 20) {
+        ontaskYouTubeAdapter.preflightAutoplay()
+      }
+    }, true)
     document.addEventListener('ended', function (e) {
       if (!e.target || e.target.tagName !== 'VIDEO') {
         return
       }
-      var video = e.target
-      var next = document.querySelector('a.ytp-next-button')
-      var nextText = next ? (next.getAttribute('aria-label') || next.title || next.href || '') : ''
-      if (!nextText) {
-        return
+      ontaskYouTubeAdapter.preflightAutoplay()
+      if (ontaskYouTubeAdapter.autoplayVerdict !== 'show') {
+        console.log('ONTASK autoplay target blocked or pending')
+        ontaskYouTubeAdapter.stopAutoplay(e.target)
       }
-      ontaskBridge.scoreText(nextText).then(function (result) {
-        if (result && result.band === 'off') {
-          console.log('ONTASK autoplay target off-task, stopping:', nextText.slice(0, 80))
-          var cancel = document.querySelector(
-            '.ytp-autonav-endscreen-upcoming-cancel-button, .ytp-upnext-cancel-button, .ytp-autonav-endscreen-button-container button'
-          )
-          if (cancel) {
-            cancel.click()
-          }
-          try {
-            video.pause()
-          } catch (err) {}
-        }
-      }).catch(function () {})
     }, true)
   }
 }

@@ -1,9 +1,9 @@
 {
-  "name": "min",
-  "productName": "Min",
-  "author": "PalmerAL",
+  "name": "ontask",
+  "productName": "OnTask",
+  "author": "OnTask contributors",
   "version": "1.35.6",
-  "description": "A fast, minimal browser that protects your privacy",
+  "description": "A focus browser that keeps the web aligned with one task",
   "electronVersion": "42.6.0",
   "main": "main.build.js",
   "standard": {
@@ -36,7 +36,6 @@
     "dexie": "^3.0.3",
     "dragula": "github:minbrowser/dragula",
     "electron-squirrel-startup": "^1.0.0",
-    "expr-eval": "^2.0.2",
     "node-abi": "^3.8.0",
     "papaparse": "^5.5.1",
     "pdfjs-dist": "4.2.67",
@@ -48,6 +47,7 @@
     "write-file-atomic": "^6.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.61.1",
     "archiver": "^4.0.1",
     "browserify": "^16.5.1",
     "concurrently": "^5.2.0",
@@ -62,9 +62,18 @@
     "standard": "^14.3.4"
   },
   "license": "Apache-2.0",
+  "overrides": {
+    "protobufjs": "7.6.3",
+    "tar": "7.5.16"
+  },
   "scripts": {
     "postinstall": "node ./scripts/setupDevEnv.js",
-    "test": "standard --verbose js/**/*.js main/*.js",
+    "test": "npm run test:ontask",
+    "test:ontask": "node --test test/ontask/*.test.js",
+    "test:legacy-lint": "standard --verbose js/**/*.js main/*.js",
+    "test:e2e": "npm run build && playwright test",
+    "test:all": "npm test && npm run test:e2e",
+    "verify": "npm run test:all && npm audit --omit=dev --audit-level=high",
     "watch": "node ./scripts/watch.js",
     "startElectron": "electron . --development-mode",
     "start": "npm run build && concurrently \"npm run watch\" \"npm run startElectron\"",
@@ -84,9 +93,5 @@
     "updateHttpsList": "node ./ext/httpsUpgrade/updateHttpsList.js",
     "updateSuffixes": "node ./ext/publicSuffixes/updateSuffixes.js",
     "lint": "prettier --write **/**/*.css **/**/*.md **/**/*.html **/**/*.json && standard --fix js/**/*.js main/*.js | snazzy"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/minbrowser/min.git"
   }
 }

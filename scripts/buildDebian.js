@@ -6,15 +6,15 @@ const createPackage = require('./createPackage.js')
 
 async function afterPackageBuilt (path, arch) {
   var installerOptions = {
-    artifactName: 'min-${version}-${arch}.deb',
-    packageName: 'min',
+    artifactName: 'ontask-${version}-${arch}.deb',
+    packageName: 'ontask',
     icon: 'icons/icon256.png',
     category: 'Network;WebBrowser',
     packageCategory: 'Network',
     mimeTypes: ['x-scheme-handler/http', 'x-scheme-handler/https', 'text/html'],
-    maintainer: 'Min Developers <280953907a@zoho.com>',
-    description: 'Min is a fast, minimal browser that protects your privacy.',
-    synopsis: 'A web browser with smarter search, improved tab management, and built-in ad blocking. Includes full-text history search, instant answers from DuckDuckGo, the ability to split tabs into groups, and more.',
+    maintainer: 'OnTask contributors',
+    description: 'OnTask is a focus browser that keeps the web aligned with one task.',
+    synopsis: 'A local-first focus browser with relevance-aware content and navigation protection.',
     depends: [
       'libsecret-1-0',
       'libasound2',
@@ -60,7 +60,7 @@ async function afterPackageBuilt (path, arch) {
     })
 }
 
-const arches = [Arch.x64, Arch.armv7l, Arch.arm64];
+const arches = [Arch.x64];
 
 (async () => {
   for (const arch of arches) {

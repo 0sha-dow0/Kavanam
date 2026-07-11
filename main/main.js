@@ -11,7 +11,6 @@ const {
   session,
   ipcMain: ipc,
   Menu, MenuItem,
-  crashReporter,
   dialog,
   nativeTheme,
   shell,
@@ -19,14 +18,8 @@ const {
   WebContentsView
 } = electron
 
-crashReporter.start({
-  submitURL: 'https://minbrowser.org/',
-  uploadToServer: false,
-  compress: true
-})
-
 if (process.argv.some(arg => arg === '-v' || arg === '--version')) {
-  console.log('Min: ' + app.getVersion())
+  console.log('OnTask: ' + app.getVersion())
   console.log('Chromium: ' + process.versions.chrome)
   process.exit()
 }
@@ -34,6 +27,7 @@ if (process.argv.some(arg => arg === '-v' || arg === '--version')) {
 let isInstallerRunning = false
 const isDevelopmentMode = process.argv.some(arg => arg === '--development-mode')
 const isDebuggingEnabled = process.argv.some(arg => arg === '--debug-browser')
+const isOnTaskE2EMode = process.argv.includes('--ontask-e2e')
 
 function clamp (n, min, max) {
   return Math.max(Math.min(n, max), min)
@@ -56,7 +50,12 @@ if (process.platform === 'win32') {
   })()
 }
 
-if (isDevelopmentMode) {
+var ontaskE2EUserDataArg = process.argv.find(function (arg) {
+  return arg.indexOf('--ontask-e2e-user-data=') === 0
+})
+if (isOnTaskE2EMode && ontaskE2EUserDataArg) {
+  app.setPath('userData', ontaskE2EUserDataArg.slice('--ontask-e2e-user-data='.length))
+} else if (isDevelopmentMode) {
   app.setPath('userData', app.getPath('userData') + '-development')
 }
 
@@ -492,7 +491,7 @@ ipc.on('request-tab-state', function(e) {
 
 /* places service */
 
-const placesPage = 'file://' + __dirname + '/js/places/placesService.html'
+const placesPage = 'min://app/js/places/placesService.html'
 
 let placesWindow = null
 app.once('ready', function() {

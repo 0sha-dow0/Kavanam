@@ -4,6 +4,8 @@ short task history) in userData so a relaunch can offer resume-or-new.
 Uses the shared fs/path/app/ipc from the concatenated main bundle.
 */
 
+const ontaskWriteFileAtomic = require('write-file-atomic')
+
 const ontaskPersistence = {
   data: null,
 
@@ -16,7 +18,12 @@ const ontaskPersistence = {
       return
     }
     try {
-      ontaskPersistence.data = JSON.parse(fs.readFileSync(ontaskPersistence.filePath(), 'utf-8'))
+      var parsed = JSON.parse(fs.readFileSync(ontaskPersistence.filePath(), 'utf-8'))
+      ontaskPersistence.data = {
+        lastSession: parsed && parsed.lastSession ? parsed.lastSession : null,
+        history: parsed && Array.isArray(parsed.history) ? parsed.history : [],
+        firstRunDone: !!(parsed && parsed.firstRunDone)
+      }
     } catch (e) {
       ontaskPersistence.data = { lastSession: null, history: [] }
     }
@@ -24,7 +31,11 @@ const ontaskPersistence = {
 
   save: function () {
     try {
-      fs.writeFileSync(ontaskPersistence.filePath(), JSON.stringify(ontaskPersistence.data))
+      ontaskWriteFileAtomic.sync(
+        ontaskPersistence.filePath(),
+        JSON.stringify(ontaskPersistence.data),
+        { encoding: 'utf-8', mode: 0o600 }
+      )
     } catch (e) {
       console.warn('ONTASK persistence write failed', e)
     }
@@ -35,8 +46,8 @@ const ontaskPersistence = {
     ontaskPersistence.data.lastSession = {
       task: session.task,
       startedAt: session.startedAt,
-      allowlist: session.allowlist,
-      overrides: session.overrides
+      allowlist: session.allowlist.slice(),
+      overrides: session.overrides.slice()
     }
     ontaskPersistence.data.history = [session.task]
       .concat(ontaskPersistence.data.history.filter(t => t !== session.task))
@@ -47,18 +58,52 @@ const ontaskPersistence = {
   onSessionUpdate: function (session) {
     ontaskPersistence.load()
     if (ontaskPersistence.data.lastSession && ontaskPersistence.data.lastSession.task === session.task) {
-      ontaskPersistence.data.lastSession.allowlist = session.allowlist
-      ontaskPersistence.data.lastSession.overrides = session.overrides
+      ontaskPersistence.data.lastSession.allowlist = session.allowlist.slice()
+      ontaskPersistence.data.lastSession.overrides = session.overrides.slice()
       ontaskPersistence.save()
     }
   },
 
-  getLastTask: function () {
+  getLastSession: function () {
     ontaskPersistence.load()
-    return ontaskPersistence.data.lastSession ? ontaskPersistence.data.lastSession.task : null
+    var saved = ontaskPersistence.data.lastSession
+    if (!saved || typeof saved.task !== 'string' || !saved.task.trim()) {
+      return null
+    }
+    var task
+    try {
+      task = ontaskIPC.cleanTask(saved.task)
+    } catch (e) {
+      return null
+    }
+    var allowlist = (Array.isArray(saved.allowlist) ? saved.allowlist : []).slice(0, 50).map(function (domain) {
+      try {
+        return ontaskIPC.cleanDomain(domain)
+      } catch (e) {
+        return null
+      }
+    }).filter(Boolean)
+    var overrides = (Array.isArray(saved.overrides) ? saved.overrides : []).slice(0, 500).map(function (record) {
+      try {
+        var page = ontaskIPC.canonicalPageURL(record && record.page)
+        if (!page) {
+          return null
+        }
+        return { page: page, id: ontaskIPC.cleanText(record.id, 256, 1) }
+      } catch (e) {
+        return null
+      }
+    }).filter(Boolean)
+    return {
+      task: task,
+      startedAt: Number(saved.startedAt) || Date.now(),
+      allowlist: allowlist,
+      overrides: overrides
+    }
   }
 }
 
-ipc.handle('ontask-get-last-task', function () {
-  return ontaskPersistence.getLastTask()
+ipc.handle('ontask-get-last-session', function (e) {
+  ontaskIPC.requireChrome(e)
+  return ontaskPersistence.getLastSession()
 })

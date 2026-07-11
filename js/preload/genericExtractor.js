@@ -15,6 +15,7 @@ var ontaskGenericExtractor = {
   MIN_GROUP: 4, // a structure must repeat at least this often to be a feed
   MIN_TEXT: 25, // an item needs at least this much text to be scoreable
   MAX_ITEMS: 200,
+  MAX_CONTAINERS: 1500,
 
   match: function () {
     return true
@@ -73,10 +74,17 @@ var ontaskGenericExtractor = {
         add(node)
       }
     })
+    document.querySelectorAll('[role="list"] > [role="listitem"], main ul > li, main ol > li').forEach(function (node) {
+      if (ge.isCandidateItem(node)) {
+        add(node)
+      }
+    })
 
-    // 2) repeated sibling/card structures
-    var all = document.getElementsByTagName('*')
-    for (var i = 0; i < all.length && results.length < ge.MAX_ITEMS; i++) {
+    // 2) repeated sibling/card structures (tbody covers table-based feeds
+    // like Hacker News)
+    var all = document.querySelectorAll('main, section, div, ul, ol, tbody')
+    var containerCount = Math.min(all.length, ge.MAX_CONTAINERS)
+    for (var i = 0; i < containerCount && results.length < ge.MAX_ITEMS; i++) {
       var container = all[i]
       if (container.childElementCount < ge.MIN_GROUP) {
         continue

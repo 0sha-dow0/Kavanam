@@ -80,12 +80,12 @@ const sessionRestore = {
     */
 
     try {
-      // first run, show the tour
+      // OnTask has its own task intake; do not send first-run users to Min.
       if (!savedStringData) {
         tasks.setSelected(tasks.add()) // create a new task
 
         var newTab = tasks.getSelected().tabs.add({
-            url: 'https://minbrowser.github.io/min/tour'
+            url: ''
         })
         browserUI.addTab(newTab, {
          enterEditMode: false

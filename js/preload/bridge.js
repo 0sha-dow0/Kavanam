@@ -9,11 +9,22 @@ var ontaskBridge = {
   statusCache: null,
   statusCacheAt: 0,
 
+  currentURL: function () {
+    var url = new URL(window.location.href)
+    url.hash = ''
+    return url.href
+  },
+
   sendCards: function (items) {
-    try {
-      ipc.send('ontask-cards-collected', { url: window.location.href, items: items })
-    } catch (e) {
-      console.log('ONTASK bridge send failed', e)
+    for (var i = 0; i < items.length; i += 50) {
+      try {
+        ipc.send('ontask-cards-collected', {
+          url: ontaskBridge.currentURL(),
+          items: items.slice(i, i + 50)
+        })
+      } catch (e) {
+        console.log('ONTASK bridge send failed', e)
+      }
     }
   },
 
@@ -37,15 +48,19 @@ var ontaskBridge = {
     return ipc.invoke('ontask-score-text', text)
   },
 
+  finalVerdict: function (id, text) {
+    return ipc.invoke('ontask-final-verdict', { id: id, text: text })
+  },
+
   sendPrimaryCheck: function (text) {
     try {
-      ipc.send('ontask-primary-check', { url: window.location.href, text: text })
+      ipc.send('ontask-primary-check', { url: ontaskBridge.currentURL(), text: text })
     } catch (e) {}
   }
 }
 
 ipc.on('ontask-verdicts', function (e, payload) {
-  if (payload && payload.verdicts) {
+  if (payload && payload.url === ontaskBridge.currentURL() && payload.verdicts) {
     ontaskSurfaceApplier.applyVerdicts(payload.verdicts)
   }
 })
@@ -53,4 +68,10 @@ ipc.on('ontask-verdicts', function (e, payload) {
 ipc.on('ontask-clear', function () {
   ontaskBridge.statusCache = null
   ontaskSurfaceApplier.clearAll()
+})
+
+ipc.on('ontask-rescore', function () {
+  ontaskBridge.statusCache = null
+  ontaskDomReader.seenIds = {}
+  ontaskDomReader.scheduleRun()
 })

@@ -1,7 +1,10 @@
 name: Build Package
 on: [workflow_dispatch]
+permissions:
+  contents: read
 jobs:
   build:
+    timeout-minutes: 45
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -38,8 +41,10 @@ jobs:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
-        node-version: 25
-    - run: npm install --omit=optional
+        node-version: 24
+        cache: npm
+    - run: npm ci
+    - run: npm test
     - name: build package
       run: ${{ matrix.cmd }}
     - name: upload package
@@ -47,3 +52,5 @@ jobs:
       with:
         name: ${{ matrix.artifact }}
         path: ${{ matrix.path }}
+        if-no-files-found: error
+        retention-days: 14

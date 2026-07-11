@@ -24,11 +24,13 @@ const modules = [
   'main/keychainService.js',
   'js/util/proxy.js',
   'main/themeMain.js',
+  'main/ontaskIPC.js',
   'main/persistence.js',
   'main/groqClient.js',
   'main/relevanceEngine.js',
   'main/focusSession.js',
-  'main/navigationGuard.js'
+  'main/navigationGuard.js',
+  'main/e2e.js'
 ]
 
 function buildMain () {
