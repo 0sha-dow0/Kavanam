@@ -1,6 +1,6 @@
 # CLAUDE.md — OnTask (Min fork)
 
-OnTask is a focus browser built as a fork of Min (Electron). The user sets **one task per session**; a relevance engine scores content against it and enforces it on three surfaces: page content, navigation, and recommendation panels. MVP target site: YouTube (watch, home, search).
+OnTask is a focus browser built as a fork of Min (Electron). The user sets **one task per session**; a relevance engine scores content against it and enforces it on three surfaces: page content, navigation, and recommendation panels. Enforcement is **generic-first**: it works on any site out of the box; YouTube (watch, home, search) is the demo-tuned surface via an optional adapter, not the scope.
 
 ## Authoritative docs (read these before making decisions)
 
@@ -15,7 +15,7 @@ OnTask is a focus browser built as a fork of Min (Electron). The user sets **one
 - Bands: score ≥0.55 on-task · 0.40–0.55 ambiguous · <0.40 off-task. Score against both task and subtask, keep the higher.
 - Never claim "page content never leaves your device" — use the approved privacy wording in the Product PRD §6.8.
 - Auth/OAuth domains are always allowed by the navigation guard.
-- All site-specific code lives in adapters; broken selectors = silent no-op + dev log.
+- **Generic-first site model:** feed/section detection defaults to the generic extractor (repeated sibling/card structures, role="feed", articles, link-dense blocks — no hardcoded selectors), which must work on arbitrary sites. Per-site adapters are an optional precision layer resolved via `getAdapter(host)` (adapter wins only if it matches the host AND covers the current page). Everything outside feed/section detection stays site-agnostic. Broken adapter → fall back to generic; broken generic → silent no-op + dev log.
 
 ## Running and building
 
@@ -45,7 +45,7 @@ Because files are concatenated (main + preload), they share one scope — no `re
 
 ## OnTask module layout (added as the plan progresses)
 
-Per Architecture §11: main-process OnTask code in `main/` (focusSession.js, relevanceEngine.js, groqClient.js, navigationGuard.js, persistence.js), preload bridge in `js/preload/` (domReader.js, surfaceApplier.js, bridge.js), site adapters in `js/preload/adapters/` (youtube.js), chrome UI in `js/` + `css/` following Min's existing patterns, bundled model in `models/minilm/`.
+Per Architecture §11: main-process OnTask code in `main/` (focusSession.js, relevanceEngine.js, groqClient.js, navigationGuard.js, persistence.js), preload bridge in `js/preload/` (domReader.js, surfaceApplier.js, bridge.js, genericExtractor.js, adapterRegistry.js), optional site adapters in `js/preload/adapters/` (youtube.js), chrome UI in `js/` + `css/` following Min's existing patterns, bundled model in `models/minilm/`.
 
 ## Conventions for this fork
 

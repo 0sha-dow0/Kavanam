@@ -11,9 +11,12 @@ const modules = [
   'js/util/settings/settingsPreload.js',
   'js/preload/passwordFill.js',
   'js/preload/translate.js',
+  'js/preload/genericExtractor.js',
+  'js/preload/adapterRegistry.js',
   'js/preload/adapters/youtube.js',
   'js/preload/bridge.js',
   'js/preload/domReader.js',
+  'js/preload/surfaceApplier.js',
 ]
 
 function buildPreload() {

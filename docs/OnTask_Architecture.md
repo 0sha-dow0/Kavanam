@@ -8,7 +8,7 @@ Status: draft for build. Companion docs: `OnTask_Product_PRD.md` (what/why), `On
 
 ## 1. Purpose and scope
 
-OnTask is a standalone desktop browser that holds the user to a single task they set at the start of a session. It reads page content locally, scores it for relevance to the task, and applies that score to three surfaces: page content, navigation, and recommendation panels. The MVP target site is YouTube across all of its surfaces (watch page, home feed, search results).
+OnTask is a standalone desktop browser that holds the user to a single task they set at the start of a session. It reads page content locally, scores it for relevance to the task, and applies that score to three surfaces: page content, navigation, and recommendation panels. Enforcement is site-agnostic: a generic extractor identifies feed/recommendation items on any page, and optional per-site adapters refine it where precision matters. YouTube (watch page, home feed, search results) is the tuned demo surface, not the product's scope boundary.
 
 This document defines the system's components, data model, data flows, and boundaries. It does not restate product rationale (see the Product PRD).
 
@@ -104,7 +104,7 @@ Two tiers, one output (`ScoredItem`).
 
 ### 5.4 Preload bridge (per page)
 Runs inside every page.
-- `DomReader`: using the active per-site adapter, collects candidate nodes (content sections, recommendation cards) and their text; sends to main for scoring. Uses a `MutationObserver` for infinite/related feeds, batched and debounced (Q23).
+- `DomReader`: using the resolved extractor (`getAdapter(host)`: a site adapter that matches and covers the current page, else the generic extractor), collects candidate nodes (content sections, recommendation cards) and their text; sends to main for scoring. Uses a `MutationObserver` for infinite/related feeds, batched and debounced (Q23).
 - `SurfaceApplier`: receives verdicts and applies them. Injects **hide-by-default CSS first** so nothing flashes before it's judged, then reveals on-task items (Q23).
 
 ### 5.5 Surface modules
@@ -112,10 +112,10 @@ One score, three appliers:
 
 - **Surface 1 — page content (Q13–Q15):** off-task *sections within* an on-task page are collapsed/hidden with a reversible "show anyway" affordance (Q14). But if the *primary content itself* is off-task (user opens an off-task video/page directly), it is **blocked**, not curated around (Q15).
 - **Surface 2 — navigation (Q16–Q21):** a main-process `NavigationGuard` intercepts top-level navigations. Off-task, cross-domain navigations are **hard-blocked and redirected back to the previous on-task page** (Q18, Q19) — no session-override escape hatch. Auth/OAuth domains and their redirect chains are always allowed (Q20). In-site drift within an allowed domain is handled by the content/recommendation surfaces, not by navigation blocking (Q21).
-- **Surface 3 — recommendations (Q22–Q26):** per-site adapter identifies recommendation cards; off-task cards are hidden; **if none qualify, the panel is left empty** (Q25). **Autoplay is intercepted** — if the next target is off-task, it is paused/replaced (Q24). Applies across **all** MVP YouTube surfaces: watch-page related, home feed, and search results (Q26).
+- **Surface 3 — recommendations (Q22–Q26):** the resolved extractor identifies recommendation cards on any site; off-task cards are hidden; **if none qualify, the panel is left empty** (Q25). **Autoplay is intercepted** — if the next target is off-task, it is paused/replaced (Q24). The YouTube adapter tunes all of its surfaces for the demo: watch-page related, home feed, and search results (Q26).
 
-### 5.6 Per-site adapters
-A small module per supported site (Q22). MVP ships one YouTube adapter covering three surfaces. Each adapter declares: recommendation-card selectors, content-section selectors, main-content selector, autoplay hook, and text-extraction rules. Adapters are the only site-specific code; the engine and surfaces are generic. Broken selectors degrade to a silent no-op + dev log (Q29).
+### 5.6 Extractors: generic default + optional site adapters
+Feed/section identification is the **only** site-specific concern, and it defaults to generic. `genericExtractor` detects candidate items on ANY page with no hardcoded selectors: repeated sibling/card structures, `role="feed"`, `<article>`, list items, and link-dense blocks, plus text extraction. Optional per-site adapters (Q22) are a precision layer over it; MVP ships one YouTube adapter (kept because the 90-second demo needs one bulletproof surface, not because YouTube is special to the product). Resolution: `getAdapter(host)` returns a site adapter that matches the host **and** covers the current page; otherwise the generic extractor. Extractor and adapters share one interface (card getters, id, text extraction). A broken or non-covering adapter degrades to the generic path; broken generic detection degrades to a silent no-op + dev log (Q29). Everything outside feed/section detection stays site-agnostic.
 
 ---
 
@@ -208,7 +208,7 @@ The distinction is deliberate: a total inability to enforce must never trap the 
 - **Embeddings:** `all-MiniLM-L6-v2` via transformers.js / ONNX Runtime, bundled.
 - **LLM assist:** Groq API (goal expansion + ambiguity tiebreaker).
 - **UI:** existing Min chrome, restyled (pastel Dia-style); Plus Jakarta Sans; prototype in `ontask-pastel.html` is the styling reference.
-- **Per-site adapters:** plain JS modules.
+- **Extractors:** generic block extractor (default, any site) + optional per-site adapters; plain JS modules.
 
 ---
 
@@ -226,8 +226,10 @@ ontask/                      (Min fork)
     domReader.js             collect + observe
     surfaceApplier.js        hide/block/curate + hide-by-default CSS
     bridge.js                IPC wiring
+    genericExtractor.js      DEFAULT: candidate blocks on any page
+    adapterRegistry.js       getAdapter(host) resolution
   adapters/
-    youtube.js               watch / home / search
+    youtube.js               optional precision layer: watch / home / search
   chrome/                    (Min renderer UI, restyled)
     intake/                  task-set screen
     focusBar/                persistent bar + subtask + end session
@@ -252,4 +254,4 @@ ontask/                      (Min fork)
 - **Block-while-pending latency (Q8)** — because ambiguous items are hidden until Groq responds, tiebreaker latency directly affects perceived UX. Keep the ambiguous band narrow and the Groq call fast; cache aggressively by id.
 - **All-surfaces YouTube (Q26)** — home and search have different DOM shapes and heavier card volume than the watch page; each needs its own selectors and scroll handling in the adapter.
 - **Autoplay interception (Q24)** — YouTube autoplay is timing-sensitive; interception must fire before navigation commits.
-- **Selector drift** — adapters are inherently brittle to site updates; mitigated by silent-no-op fail-open and isolating all site-specifics to the adapter.
+- **Selector drift** — site adapters are inherently brittle to site updates; mitigated by falling back to the generic extractor when an adapter stops covering a page, plus silent-no-op fail-open and isolating all site-specifics to the adapter layer.

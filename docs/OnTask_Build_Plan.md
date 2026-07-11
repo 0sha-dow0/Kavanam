@@ -88,16 +88,16 @@ Tasks are labeled `T<phase>.<n>`. Phases must be done in order. Within reason, t
 
 ## Phase 2 — DOM read bridge
 
-> Goal: read page text reliably via a per-site adapter, and be able to apply a class to nodes. No scoring yet.
+> Goal: read page text reliably via the generic extractor (optional per-site adapter override), and be able to apply a class to nodes. No scoring yet.
 
-### T2.1 — YouTube adapter skeleton
-- **Goal:** an adapter module that matches YouTube and declares selectors for recommendation cards on the **watch page only** (home/search come later), plus a text-extraction function.
-- **Files:** `adapters/youtube.js`.
-- **Test (manual):** on a watch page, run the adapter's card query in devtools; confirm it returns the related-video cards.
-- **Done when:** the selector reliably returns watch-page rec cards. **On pass: commit and continue. On fail: stop and report.**
+### T2.1 — Generic candidate-block extraction (works on any page)
+- **Goal:** a generic extractor that runs on ANY page and identifies candidate feed/recommendation items with **no hardcoded selectors** — repeated sibling/card structures, `role="feed"`, `<article>`, list items, link-dense blocks — plus a text-extraction function. Per-site adapters are an optional precision layer resolved via `getAdapter(host)`: a site adapter that matches the host and covers the current page wins; otherwise the generic extractor runs. Ships with one optional YouTube adapter (watch-page selectors) to guarantee the demo surface.
+- **Files:** `preload/genericExtractor.js`, `preload/adapterRegistry.js`, `adapters/youtube.js` (optional precision layer).
+- **Test (manual):** on a YouTube watch page AND at least one non-YouTube feed page, run the resolved extractor's card query in devtools; confirm it returns the feed/recommendation items on both.
+- **Done when:** candidate items are reliably returned on both. **On pass: commit and continue. On fail: stop and report.**
 
 ### T2.2 — DomReader collects card text
-- **Goal:** preload uses the adapter to collect `{id, text}` for each rec card and logs them.
+- **Goal:** preload uses the resolved extractor (`getAdapter`) to collect `{id, text}` for each rec card and logs them.
 - **Files:** `preload/domReader.js`, `preload/bridge.js`.
 - **Test (manual):** load a watch page; console shows a list of card ids + extracted text (title + channel + any snippet).
 - **Done when:** real card text is captured. **On pass: commit and continue. On fail: stop and report.**
@@ -135,8 +135,8 @@ Tasks are labeled `T<phase>.<n>`. Phases must be done in order. Within reason, t
 ### T3.3 — Wire scoring to the watch-page rec cards
 - **Goal:** DomReader text → engine → verdict per band (≥0.55 on, 0.40–0.55 ambiguous, <0.40 off) → SurfaceApplier hides `off` cards. For now treat `ambiguous` as **hidden** (matches the block-while-pending stance; Groq comes in Phase 4).
 - **Files:** engine + bridge + applier.
-- **Test (manual):** set task "write my statement of purpose"; on an SOP video, off-task cards (entertainment, etc.) disappear, SOP-related ones remain.
-- **Done when:** the watch-page panel visibly curates. **On pass: commit and continue. On fail: stop and report.** *(This is the first demo-able moment.)*
+- **Test (manual):** set task "write my statement of purpose"; on an SOP video, off-task cards (entertainment, etc.) disappear, SOP-related ones remain. Also spot-check one non-YouTube feed page: off-task items hidden via the generic path.
+- **Done when:** the watch-page panel visibly curates (and the generic path curates a non-YouTube feed). **On pass: commit and continue. On fail: stop and report.** *(This is the first demo-able moment.)*
 
 ### T3.4 — Hide-by-default (no flash)
 - **Goal:** inject hiding CSS so cards start hidden and are revealed only when scored on-task, preventing flash-of-unfiltered-content.
@@ -176,29 +176,29 @@ Tasks are labeled `T<phase>.<n>`. Phases must be done in order. Within reason, t
 
 ---
 
-## Phase 5 — Recommendations across all YouTube surfaces
+## Phase 5 — Generic curation across all sites + YouTube refinement
 
-> Goal: extend curation from the watch page to home and search (Q26). One surface per task.
+> Goal: curation runs on any site via the generic extractor by default. The YouTube adapter is an optional precision layer, extended here to home and search so the demo surface is bulletproof (Q26). One surface per task.
 
-### T5.1 — Home feed adapter + curation
-- **Goal:** add home-feed selectors to the YouTube adapter; curate the home grid with the same engine.
+### T5.1 — Home feed refinement (YouTube adapter)
+- **Goal:** add home-feed selectors to the optional YouTube adapter (the generic path already approximates this surface); curate the home grid with the same engine, now precisely.
 - **Files:** `adapters/youtube.js`, applier.
 - **Test (manual):** on YouTube home with a task set, off-task home cards are hidden; on-task remain; empty if none.
-- **Done when:** home feed curates. **On pass: commit and continue. On fail: stop and report.**
+- **Done when:** home feed curates precisely. **On pass: commit and continue. On fail: stop and report.**
 
-### T5.2 — Search results adapter + curation
-- **Goal:** add search-results selectors; curate search results.
+### T5.2 — Search results refinement (YouTube adapter)
+- **Goal:** add search-results selectors to the optional YouTube adapter; curate search results precisely.
 - **Files:** `adapters/youtube.js`, applier.
 - **Test (manual):** run a search; off-task results hidden, on-task shown.
-- **Done when:** search curates. **On pass: commit and continue. On fail: stop and report.**
+- **Done when:** search curates precisely. **On pass: commit and continue. On fail: stop and report.**
 
-### T5.3 — Empty-panel behavior
-- **Goal:** when no cards qualify on any surface, leave the panel genuinely empty (no fallback message).
+### T5.3 — Empty-panel behavior (all sites)
+- **Goal:** when no cards qualify on any surface — generic or adapter-backed — leave the panel genuinely empty (no fallback message).
 - **Files:** applier.
-- **Test (manual):** force an all-off-task state; the panel is calmly empty, layout not broken.
+- **Test (manual):** force an all-off-task state; the panel is calmly empty, layout not broken. Check on YouTube and one generic-path site.
 - **Done when:** empty state is clean. **On pass: commit and continue. On fail: stop and report.**
 
-### T5.4 — Autoplay interception
+### T5.4 — Autoplay interception (YouTube demo hardening)
 - **Goal:** intercept the autoplay next-target; if off-task, stop/replace it.
 - **Files:** `adapters/youtube.js`, a main/preload hook.
 - **Test (manual):** let an on-task video end with an off-task autoplay target queued; confirm autoplay does not proceed to the off-task video.

@@ -32,7 +32,7 @@ OnTask is deliberately assertive. This is not a gentle nudge tool: off-task page
 - Keep the demo (YouTube) flawless.
 
 **Non-goals (MVP)**
-- No sites beyond YouTube (but *all* YouTube surfaces are in — see scope).
+- No per-site tuning beyond YouTube (all other sites are covered by the generic path — see scope).
 - No accounts, sync, or cross-device.
 - No cross-app / OS-level awareness.
 - No learning loop at scale, no external search-API backfill for recommendations.
@@ -98,7 +98,7 @@ OnTask is deliberately assertive. This is not a gentle nudge tool: off-task page
 - In-site drift handled by content/recommendation surfaces, not navigation blocking (Q21).
 
 ### 6.5 Surface 3 — recommendations
-- Per-site adapter selectors; YouTube adapter covers watch, home, and search (Q22, Q26).
+- Generic extractor identifies feed/recommendation items on any site (no per-site selectors required); optional per-site adapters add precision — the YouTube adapter covers watch, home, and search (Q22, Q26).
 - Hide-by-default then reveal on-task; batched, debounced scoring on infinite scroll (Q23).
 - Empty panel when nothing on-task qualifies (Q25).
 - Autoplay intercepted; off-task next target paused/replaced (Q24).
@@ -126,12 +126,13 @@ The "page content never leaves your device" claim is **not** used (Q31).
 - Base: Min (Electron) fork, pastel Dia-style UI.
 - One immutable task per session; Groq goal expansion + tiebreaker.
 - All three surfaces active.
-- **YouTube across all surfaces: watch page, home feed, search results** (Q26).
+- **Generic feed/recommendation curation on ALL sites out of the box** (no per-site selectors required).
+- **YouTube adapter tuned across all surfaces: watch page, home feed, search results** (Q26) — optional precision layer so the demo is bulletproof.
 - Autoplay interception (Q24).
 - Resume-or-new, subtask display, first-run card.
 
 **Out of scope (MVP)** — Q43
-- Any site other than YouTube.
+- Per-site adapters beyond YouTube (other sites rely on the generic path).
 - Accounts, sync, cross-device.
 - Cross-app / OS-level awareness.
 - Search-API backfill for recommendations.
@@ -154,7 +155,7 @@ The "page content never leaves your device" claim is **not** used (Q31).
 - **Hard navigation blocking frustrates on false positives.** No escape hatch for navigation means a wrong block is more costly than a wrong content-hide. *Mitigation:* generous allowlist seeding, always-allow auth domains, and fast iteration on the allowlist during the session.
 - **All-surfaces YouTube widens surface area.** Home and search feeds are higher-volume and differently structured than the watch page. *Mitigation:* build watch first, then home, then search, each as its own tested chunk.
 - **Preload reach.** Everything assumes we can inject into YouTube. *Mitigation:* verified in Phase 0 before any feature work.
-- **Selector drift.** Site updates break adapters. *Mitigation:* silent no-op fail-open, all site-specifics isolated to the adapter.
+- **Selector drift.** Site updates break adapters. *Mitigation:* fall back to the generic extractor when an adapter stops covering a page; silent no-op fail-open; all site-specifics isolated to the adapter layer.
 
 ---
 

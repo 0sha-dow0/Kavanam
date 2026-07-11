@@ -1,7 +1,9 @@
 /*
-OnTask YouTube adapter — the only YouTube-specific code in the pipeline.
+OnTask YouTube adapter — an OPTIONAL precision layer over the generic
+extractor, kept because the 90-second demo needs one bulletproof surface.
 Declares which DOM nodes are recommendation cards and how to read them.
-MVP surface: the watch page (home and search are added in Phase 5).
+Tuned surface: the watch page (home and search are added in Phase 5);
+pages it doesn't cover fall back to the generic extractor via the registry.
 Selectors verified against the live YouTube DOM (yt-lockup-view-model cards);
 ytd-compact-video-renderer kept as a fallback for older layouts.
 */
@@ -11,6 +13,11 @@ var ontaskYouTubeAdapter = {
 
   match: function (loc) {
     return /(^|\.)youtube\.com$/.test(loc.hostname)
+  },
+
+  // only claim pages this adapter actually covers; others go generic
+  handles: function (loc) {
+    return ontaskYouTubeAdapter.surface(loc) !== null
   },
 
   surface: function (loc) {
@@ -62,13 +69,4 @@ var ontaskYouTubeAdapter = {
   }
 }
 
-var ontaskAdapters = [ontaskYouTubeAdapter]
-
-function ontaskActiveAdapter () {
-  for (var i = 0; i < ontaskAdapters.length; i++) {
-    if (ontaskAdapters[i].match(window.location)) {
-      return ontaskAdapters[i]
-    }
-  }
-  return null
-}
+ontaskRegisterAdapter(ontaskYouTubeAdapter)

@@ -7,6 +7,7 @@ re-collection (scroll, retries) only reports new cards.
 
 var ontaskDomReader = {
   seenIds: {},
+  nodesById: {},
 
   collect: function () {
     var adapter = ontaskActiveAdapter()
@@ -17,7 +18,12 @@ var ontaskDomReader = {
     adapter.getRecommendationCards().forEach(function (node) {
       var id = adapter.cardId(node)
       var text = adapter.extractText(node)
-      if (!id || !text || ontaskDomReader.seenIds[id]) {
+      if (!id || !text) {
+        return
+      }
+      // always refresh the node ref (SPA navigations replace nodes)
+      ontaskDomReader.nodesById[id] = node
+      if (ontaskDomReader.seenIds[id]) {
         return
       }
       ontaskDomReader.seenIds[id] = true
@@ -56,7 +62,8 @@ var ontaskDomReader = {
   },
 
   start: function () {
-    if (!ontaskActiveAdapter()) {
+    // enforcement only applies to real web pages, not browser-internal ones
+    if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') {
       return
     }
     ontaskDomReader.run()
