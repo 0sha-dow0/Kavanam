@@ -202,6 +202,14 @@ const ontaskNavigationGuard = {
       if (!query || query.length < 6) {
         return { allow: true, reason: 'search' }
       }
+      // repeat searches skip the round-trip: verdicts are remembered per session
+      var session0 = focusSession.get()
+      var judged = session0 && session0.judgedSearches && session0.judgedSearches[query]
+      if (judged) {
+        return judged === 'allow'
+          ? { allow: true, reason: 'search allowed (cached)' }
+          : { allow: false, reason: 'off-task search (cached)' }
+      }
       var queryScore = await ontaskRelevanceEngine.scoreText(query, { taskOnly: true })
       var queryBand = ontaskRelevanceEngine.band(queryScore)
       if (queryBand === 'on' || queryBand === null) {
@@ -210,6 +218,9 @@ const ontaskNavigationGuard = {
       if (ontaskGroqClient.available()) {
         var session1 = focusSession.get()
         var searchVerdict = await ontaskGroqClient.judgeSearch(session1.task, session1.expandedIntent, query)
+        if (session1 && session1.judgedSearches && focusSession.get() === session1) {
+          session1.judgedSearches[query] = searchVerdict
+        }
         return searchVerdict === 'allow'
           ? { allow: true, reason: 'search allowed (groq)' }
           : { allow: false, reason: 'off-task search' }
@@ -244,7 +255,7 @@ const ontaskNavigationGuard = {
         return { allow: true, reason: 'tiebreak-unavailable' }
       }
       var session = focusSession.get()
-      var verdict = await ontaskGroqClient.tiebreak(session.task, session.expandedIntent, text)
+      var verdict = await ontaskGroqClient.tiebreak(session.task, session.expandedIntent, text, session.subtasks)
       return verdict === 'on'
         ? { allow: true, reason: 'tiebreak on-task' }
         : { allow: false, reason: 'tiebreak ' + offReason }
@@ -419,10 +430,12 @@ ipc.on('ontask-primary-check', async function (e, payload) {
     if (isHub || isSiteSearch) {
       return
     }
-    // Groq endorsed these domains for this task: never page-block inside them
+    // Groq endorsed these domains for this task: never page-block inside them.
+    // Hosts Groq already ruled on-task this session skip the round-trip too.
     var sessionForAllowlist = focusSession.get()
     var pageAllowlist = (sessionForAllowlist && sessionForAllowlist.allowlist) || []
-    if (pageAllowlist.some(function (d) { return ontaskNavigationGuard.hostMatches(targetURL.hostname, d) })) {
+    var approvedHosts = (sessionForAllowlist && sessionForAllowlist.approvedHosts) || []
+    if (pageAllowlist.concat(approvedHosts).some(function (d) { return ontaskNavigationGuard.hostMatches(targetURL.hostname, d) })) {
       ontaskNavigationGuard.notifyChrome('ontask-page-status', { band: 'on', url: url })
       ontaskNavigationGuard.lastOnTaskURL[wc.id] = url
       return
@@ -446,12 +459,17 @@ ipc.on('ontask-primary-check', async function (e, payload) {
   if ((band === 'off' || band === 'ambiguous') && ontaskGroqClient.available()) {
     try {
       var session = focusSession.get()
-      var verdict = await ontaskGroqClient.tiebreak(session.task, session.expandedIntent, text)
+      var verdict = await ontaskGroqClient.tiebreak(session.task, session.expandedIntent, text, session.subtasks)
       if (wc.isDestroyed() || wc.getURL() !== url || focusSession.get() !== checkedSession) {
         return
       }
       band = verdict === 'on' ? 'on' : 'off'
       console.log('ONTASK primary tiebreak:', band)
+      if (band === 'on' && session.approvedHosts &&
+          session.approvedHosts.indexOf(targetURL.hostname) === -1) {
+        // remember the host: later pages there skip the Groq round-trip
+        session.approvedHosts.push(targetURL.hostname)
+      }
     } catch (err) {
       band = 'ambiguous' // tiebreak outage: never block a page on a guess
     }

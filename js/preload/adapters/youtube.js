@@ -39,11 +39,16 @@ var ontaskYouTubeAdapter = {
       'ytd-watch-next-secondary-results-renderer ytd-compact-video-renderer'
     ],
     home: [
-      'ytd-rich-grid-renderer ytd-rich-item-renderer'
+      'ytd-rich-grid-renderer ytd-rich-item-renderer',
+      // Shorts lockups match directly: their shelf container keeps changing
+      'ytm-shorts-lockup-view-model',
+      'ytm-shorts-lockup-view-model-v2'
     ],
     search: [
       'ytd-section-list-renderer ytd-video-renderer',
-      'ytd-section-list-renderer yt-lockup-view-model'
+      'ytd-section-list-renderer yt-lockup-view-model',
+      'ytm-shorts-lockup-view-model',
+      'ytm-shorts-lockup-view-model-v2'
     ]
   },
 
@@ -66,12 +71,16 @@ var ontaskYouTubeAdapter = {
     })
   },
 
-  // stable id: the video id from the card's /watch link
+  // stable id: the video id from the card's /watch or /shorts link
   cardId: function (node) {
-    var link = node.querySelector('a[href*="/watch"]')
+    var link = node.querySelector('a[href*="/watch"], a[href*="/shorts/"]')
     if (link && link.href) {
       try {
-        return new URL(link.href).searchParams.get('v')
+        var parsed = new URL(link.href)
+        if (parsed.pathname.indexOf('/shorts/') === 0) {
+          return parsed.pathname.split('/')[2] || null
+        }
+        return parsed.searchParams.get('v')
       } catch (e) {}
     }
     return null

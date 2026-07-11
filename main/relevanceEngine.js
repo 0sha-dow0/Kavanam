@@ -33,6 +33,7 @@ const ontaskRelevanceEngine = {
     ontaskRelevanceEngine.extractor = null
     ontaskRelevanceEngine.taskEmbedding = null
     ontaskRelevanceEngine.subtaskEmbedding = null
+    ontaskRelevanceEngine.goalEmbeddings = []
     ontaskRelevanceEngine.verdictCache = {}
     ontaskRelevanceEngine.tiebreakInflight = {}
     console.warn('ONTASK engine failure - enforcement disabled:', err && err.message)
@@ -101,6 +102,7 @@ const ontaskRelevanceEngine = {
     ontaskRelevanceEngine.taskText = task
     ontaskRelevanceEngine.subtaskEmbedding = null
     ontaskRelevanceEngine.taskEmbedding = null
+    ontaskRelevanceEngine.goalEmbeddings = []
     ontaskRelevanceEngine.invalidate()
     ontaskRelevanceEngine.taskReadyPromise = ontaskRelevanceEngine.embed(task).then(function (embedding) {
       if (focusSession.get() !== session || ontaskRelevanceEngine.taskText !== task) {
@@ -116,8 +118,11 @@ const ontaskRelevanceEngine = {
     return ontaskRelevanceEngine.taskReadyPromise
   },
 
-  // once Groq expands the goal, re-embed a richer task text: sharper
-  // separation between on-task and off-task content
+  goalEmbeddings: [], // one embedding per Groq sub-task: a page matching ANY sub-goal is on-task
+
+  // once Groq expands the goal, re-embed a richer task text AND each
+  // sub-task separately: "research professors" matches a faculty page far
+  // better than the whole task sentence ever will
   onGoalExpanded: async function (session) {
     var rich = session.task
     if (session.expandedIntent) {
@@ -126,11 +131,17 @@ const ontaskRelevanceEngine = {
     if (session.keywords && session.keywords.length) {
       rich += '. ' + session.keywords.join(', ')
     }
-    var emb = await ontaskRelevanceEngine.embed(rich)
-    if (emb && focusSession.session === session) {
-      ontaskRelevanceEngine.taskEmbedding = emb
+    var subtasks = session.subtasks || []
+    var embeddings = await Promise.all(
+      [rich].concat(subtasks).map(function (text) {
+        return ontaskRelevanceEngine.embed(text)
+      })
+    )
+    if (embeddings[0] && focusSession.session === session) {
+      ontaskRelevanceEngine.taskEmbedding = embeddings[0]
+      ontaskRelevanceEngine.goalEmbeddings = embeddings.slice(1).filter(Boolean)
       ontaskRelevanceEngine.invalidate()
-      console.log('ONTASK task embedding enriched with expanded intent')
+      console.log('ONTASK task embedding enriched; sub-task embeddings: ' + ontaskRelevanceEngine.goalEmbeddings.length)
     }
   },
 
@@ -147,6 +158,7 @@ const ontaskRelevanceEngine = {
     ontaskRelevanceEngine.taskText = null
     ontaskRelevanceEngine.taskEmbedding = null
     ontaskRelevanceEngine.subtaskEmbedding = null
+    ontaskRelevanceEngine.goalEmbeddings = []
     ontaskRelevanceEngine.taskReadyPromise = null
     ontaskRelevanceEngine.verdictCache = {}
     ontaskRelevanceEngine.tiebreakInflight = {}
@@ -172,12 +184,20 @@ const ontaskRelevanceEngine = {
     if (!emb) {
       return null
     }
-    var s1 = ontaskRelevanceEngine.similarity(emb, ontaskRelevanceEngine.taskEmbedding)
+    var best = ontaskRelevanceEngine.similarity(emb, ontaskRelevanceEngine.taskEmbedding)
+    // Groq sub-goals are part of the task definition (not page-derived),
+    // so they count even under taskOnly
+    ontaskRelevanceEngine.goalEmbeddings.forEach(function (goalEmb) {
+      var s = ontaskRelevanceEngine.similarity(emb, goalEmb)
+      if (s !== null && (best === null || s > best)) {
+        best = s
+      }
+    })
     if (opts && opts.taskOnly) {
-      return s1
+      return best
     }
     var s2 = ontaskRelevanceEngine.similarity(emb, ontaskRelevanceEngine.subtaskEmbedding)
-    return Math.max(s1 === null ? -1 : s1, s2 === null ? -1 : s2)
+    return Math.max(best === null ? -1 : best, s2 === null ? -1 : s2)
   },
 
   band: function (score) {
@@ -316,7 +336,7 @@ const ontaskRelevanceEngine = {
           }, ontaskRelevanceEngine.TIEBREAK_TIMEOUT)
         })
         Promise.race([
-          ontaskGroqClient.tiebreakBatch(task, session ? session.expandedIntent : '', chunk, pageContext),
+          ontaskGroqClient.tiebreakBatch(task, session ? session.expandedIntent : '', chunk, pageContext, session ? session.subtasks : []),
           timeout
         ]).then(function (judged) {
           if (revision !== ontaskRelevanceEngine.revision || focusSession.get() !== session) {
@@ -356,7 +376,8 @@ const ontaskRelevanceEngine = {
       ontaskRelevanceEngine.tiebreakInflight[cacheKey] = ontaskGroqClient.tiebreak(
         task,
         session ? session.expandedIntent : '',
-        item.text
+        item.text,
+        session ? session.subtasks : []
       ).finally(function () {
         delete ontaskRelevanceEngine.tiebreakInflight[cacheKey]
       })
@@ -396,7 +417,8 @@ const ontaskRelevanceEngine = {
       var verdict = await ontaskGroqClient.tiebreak(
         session.task,
         session.expandedIntent,
-        text
+        text,
+        session.subtasks
       )
       return verdict === 'on' ? 'show' : 'hide'
     } catch (err) {
@@ -488,3 +510,11 @@ ipc.handle('ontask-final-verdict', function (e, payload) {
     ontaskIPC.cleanText(payload.text, 512, 1)
   )
 })
+
+/* warm the model at app launch so the first judgment after task intake
+   doesn't pay the 1-3s model load */
+if (typeof app !== 'undefined' && typeof isOnTaskE2EMode !== 'undefined' && !isOnTaskE2EMode) {
+  app.whenReady().then(function () {
+    ontaskRelevanceEngine.ensureLoaded()
+  })
+}

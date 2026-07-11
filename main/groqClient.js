@@ -7,7 +7,8 @@ Unavailable/unreachable Groq degrades to local-only mode; it never crashes.
 
 const ontaskGroqClient = {
   keyCache: undefined,
-  MODEL: 'llama-3.3-70b-versatile',
+  MODEL: 'llama-3.3-70b-versatile', // judgment-critical, rare: expansion, page bounces
+  FAST_MODEL: 'llama-3.1-8b-instant', // volume + latency: feed batches
 
   secureKeyPath: function () {
     return path.join(app.getPath('userData'), 'ontask-groq-key.enc')
@@ -94,7 +95,7 @@ const ontaskGroqClient = {
     ontaskGroqClient.keyCache = undefined
   },
 
-  complete: async function (systemPrompt, userPrompt, expectJson) {
+  complete: async function (systemPrompt, userPrompt, expectJson, model) {
     var key = ontaskGroqClient.key()
     if (!key) {
       throw new Error('ONTASK groq: no API key')
@@ -110,7 +111,7 @@ const ontaskGroqClient = {
           Authorization: 'Bearer ' + key
         },
         body: JSON.stringify({
-          model: ontaskGroqClient.MODEL,
+          model: model || ontaskGroqClient.MODEL,
           temperature: 0,
           response_format: expectJson ? { type: 'json_object' } : undefined,
           messages: [
@@ -138,6 +139,7 @@ const ontaskGroqClient = {
       '(e.g. for a person, "sop" almost always means statement of purpose for university ' +
       'applications, not standard operating procedure). Respond with JSON only: ' +
       '{"intent": "<one-sentence description of what content is relevant>", ' +
+      '"subtasks": ["..up to 8 short sub-tasks a person doing this task would naturally also do (e.g. researching the people, places, requirements, and tools involved).."], ' +
       '"keywords": ["..up to 12 short keywords/phrases.."], ' +
       '"domains": ["..up to 10 bare domains (no scheme) a person doing this task legitimately needs.."]}',
       'Task: ' + task,
@@ -146,6 +148,7 @@ const ontaskGroqClient = {
     var parsed = JSON.parse(content)
     return {
       intent: typeof parsed.intent === 'string' ? parsed.intent : '',
+      subtasks: Array.isArray(parsed.subtasks) ? parsed.subtasks.filter(s => typeof s === 'string' && s.trim()).slice(0, 8) : [],
       keywords: Array.isArray(parsed.keywords) ? parsed.keywords.filter(k => typeof k === 'string').slice(0, 12) : [],
       domains: Array.isArray(parsed.domains) ? parsed.domains.filter(d => typeof d === 'string').map(d => d.toLowerCase().replace(/^www\./, '')).slice(0, 10) : []
     }
@@ -169,19 +172,21 @@ const ontaskGroqClient = {
 
   // batched ambiguity tiebreaker: one call judges a whole chunk of items,
   // instead of one request per item (which floods the API on wide feeds)
-  tiebreakBatch: async function (task, intent, items, pageContext) {
+  tiebreakBatch: async function (task, intent, items, pageContext, subtasks) {
     var numbered = items.map(function (item, i) {
       return (i + 1) + '. ' + String(item.text).slice(0, 200)
     }).join('\n')
     var content = await ontaskGroqClient.complete(
       'You judge whether content items are relevant to the user\'s current task. ' +
-      'Mark "on" anything plausibly useful for the task — tools, services, guides, and results count even when their snippet reads like marketing. ' +
+      'Mark "on" anything plausibly useful for the task or its sub-tasks — tools, services, guides, and results count even when their snippet reads like marketing. ' +
       'Mark "off" only content clearly unrelated to the task. ' +
       'Respond with JSON only, keyed by item number: {"verdicts": {"1": "on", "2": "off", ...}} — one entry per numbered item.',
       'Task: ' + task + (intent ? '\nTask intent: ' + intent : '') +
+      (subtasks && subtasks.length ? '\nTask sub-tasks: ' + subtasks.join('; ') : '') +
       (pageContext ? '\nThe user is currently viewing: ' + pageContext : '') +
       '\nItems:\n' + numbered,
-      true
+      true,
+      ontaskGroqClient.FAST_MODEL
     )
     var parsed = JSON.parse(content)
     var verdicts = parsed.verdicts || {}
@@ -196,15 +201,17 @@ const ontaskGroqClient = {
      opened gets bounced — the harshest intervention, so give the benefit
      of the doubt. A person's task implies a larger goal: researching
      related people, schools, organizations, and requirements serves it. */
-  tiebreak: async function (task, intent, itemText) {
+  tiebreak: async function (task, intent, itemText, subtasks) {
     var content = await ontaskGroqClient.complete(
       'You judge whether content is relevant to the user\'s current task. ' +
       'Consider what a person doing this task plausibly needs — researching related people, ' +
       'institutions, requirements, and tools counts as relevant when it serves the task\'s ' +
-      'likely larger goal. Answer "off" only for content clearly unrelated to the task ' +
-      '(entertainment, shopping, unrelated topics). ' +
+      'likely larger goal or any of its sub-tasks. Answer "off" only for content clearly ' +
+      'unrelated to the task (entertainment, shopping, unrelated topics). ' +
       'Respond with JSON only: {"verdict": "on"} or {"verdict": "off"}.',
-      'Task: ' + task + (intent ? '\nTask intent: ' + intent : '') + '\nContent: ' + itemText,
+      'Task: ' + task + (intent ? '\nTask intent: ' + intent : '') +
+      (subtasks && subtasks.length ? '\nTask sub-tasks: ' + subtasks.join('; ') : '') +
+      '\nContent: ' + itemText,
       true
     )
     var parsed = JSON.parse(content)

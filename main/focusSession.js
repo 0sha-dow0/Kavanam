@@ -24,6 +24,9 @@ var focusSession = {
       subtaskEmbedding: null,
       allowlist: [],
       overrides: [],
+      subtasks: [],
+      approvedHosts: [], // hosts Groq ruled on-task this session (skip re-judging)
+      judgedSearches: {}, // search query -> allow/block from Groq this session
       startedAt: Date.now()
     }
     console.log('ONTASK session started:', task)
@@ -48,6 +51,7 @@ var focusSession = {
         return
       }
       session.expandedIntent = expansion.intent
+      session.subtasks = expansion.subtasks || []
       session.keywords = expansion.keywords
       expansion.domains.forEach(function (d) {
         if (session.allowlist.indexOf(d) === -1) {
@@ -81,6 +85,9 @@ var focusSession = {
       subtaskEmbedding: null,
       allowlist: Array.isArray(saved.allowlist) ? saved.allowlist.slice() : [],
       overrides: Array.isArray(saved.overrides) ? saved.overrides.slice() : [],
+      subtasks: [],
+      approvedHosts: [],
+      judgedSearches: {},
       startedAt: Number(saved.startedAt) || Date.now()
     }
     ontaskPersistence.onSessionUpdate(focusSession.session)
