@@ -192,12 +192,19 @@ const ontaskGroqClient = {
     })
   },
 
-  // ambiguity tiebreaker (Q8): strict on/off verdict for one item
+  /* ambiguity tiebreaker (Q8): used to decide whether a PAGE the user
+     opened gets bounced — the harshest intervention, so give the benefit
+     of the doubt. A person's task implies a larger goal: researching
+     related people, schools, organizations, and requirements serves it. */
   tiebreak: async function (task, intent, itemText) {
     var content = await ontaskGroqClient.complete(
-      'You judge whether a content item is relevant to the user\'s current task. ' +
+      'You judge whether content is relevant to the user\'s current task. ' +
+      'Consider what a person doing this task plausibly needs — researching related people, ' +
+      'institutions, requirements, and tools counts as relevant when it serves the task\'s ' +
+      'likely larger goal. Answer "off" only for content clearly unrelated to the task ' +
+      '(entertainment, shopping, unrelated topics). ' +
       'Respond with JSON only: {"verdict": "on"} or {"verdict": "off"}.',
-      'Task: ' + task + (intent ? '\nTask intent: ' + intent : '') + '\nItem: ' + itemText,
+      'Task: ' + task + (intent ? '\nTask intent: ' + intent : '') + '\nContent: ' + itemText,
       true
     )
     var parsed = JSON.parse(content)
