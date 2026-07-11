@@ -21,6 +21,49 @@ const intake = {
   completedList: document.getElementById('ontask-completed-list'),
   firstRunCard: document.getElementById('ontask-first-run'),
   firstRunOk: document.getElementById('ontask-first-run-ok'),
+  keySetup: document.getElementById('ontask-key-setup'),
+  keyForm: document.getElementById('ontask-key-form'),
+  keyInput: document.getElementById('ontask-key-input'),
+  keyError: document.getElementById('ontask-key-error'),
+  keyGet: document.getElementById('ontask-key-get'),
+  keySkip: document.getElementById('ontask-key-skip'),
+
+  // first-run API key screen: shown before the intake when Groq isn't
+  // configured yet. Connect stores the key (encrypted); Skip runs local-only.
+  showKeySetup: function () {
+    intake.keySetup.hidden = false
+    try {
+      webviews.requestPlaceholder('ontaskIntake')
+    } catch (e) {}
+    setTimeout(function () { intake.keyInput.focus() }, 0)
+  },
+
+  finishKeySetup: function () {
+    ipc.send('ontask-key-setup-done')
+    intake.keySetup.hidden = true
+    intake.show()
+  },
+
+  onKeySubmit: function (e) {
+    e.preventDefault()
+    var key = intake.keyInput.value.trim()
+    if (!key) {
+      intake.keyInput.focus()
+      return
+    }
+    intake.keyError.hidden = true
+    ipc.invoke('ontask-groq-key-set', key).then(function (status) {
+      if (status && status.configured) {
+        intake.finishKeySetup()
+      } else {
+        intake.keyError.textContent = 'That key could not be saved. Check it and try again.'
+        intake.keyError.hidden = false
+      }
+    }).catch(function () {
+      intake.keyError.textContent = 'That key could not be saved. Check it and try again.'
+      intake.keyError.hidden = false
+    })
+  },
 
   formatDuration: function (milliseconds) {
     var minutes = Math.max(0, Math.round((Number(milliseconds) || 0) / 60000))
@@ -213,14 +256,26 @@ const intake = {
   },
 
   initialize: function () {
-    // show immediately (a fresh main process never has a session), then
-    // reconcile: if the chrome was reloaded mid-session, dismiss the intake
-    intake.show()
-    ipc.invoke('ontask-get-session').then(function (session) {
-      if (session) {
-        console.log('ONTASK intake: session already active, skipping intake')
-        intake.hide()
+    // first run with no Groq key configured -> API key setup screen first;
+    // otherwise go straight to the task intake
+    ipc.invoke('ontask-key-setup-needed').then(function (needed) {
+      if (needed) {
+        intake.showKeySetup()
+        return
       }
+      intake.show()
+      ipc.invoke('ontask-get-session').then(function (session) {
+        if (session) {
+          console.log('ONTASK intake: session already active, skipping intake')
+          intake.hide()
+        }
+      })
+    })
+
+    intake.keyForm.addEventListener('submit', intake.onKeySubmit)
+    intake.keySkip.addEventListener('click', intake.finishKeySetup)
+    intake.keyGet.addEventListener('click', function () {
+      ipc.invoke('ontask-open-external', 'https://console.groq.com/keys')
     })
 
     intake.form.addEventListener('submit', intake.onSubmit)

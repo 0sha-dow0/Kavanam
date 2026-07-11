@@ -59,10 +59,11 @@ const ontaskPersistence = {
         lastSession: lastSession && !lastSession.completedAt ? lastSession : null,
         sessions: sessions,
         history: history,
-        firstRunDone: !!(parsed && parsed.firstRunDone)
+        firstRunDone: !!(parsed && parsed.firstRunDone),
+        keySetupDone: !!(parsed && parsed.keySetupDone)
       }
     } catch (e) {
-      ontaskPersistence.data = { lastSession: null, sessions: [], history: [], firstRunDone: false }
+      ontaskPersistence.data = { lastSession: null, sessions: [], history: [], firstRunDone: false, keySetupDone: false }
     }
   },
 

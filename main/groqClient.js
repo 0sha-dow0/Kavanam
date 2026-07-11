@@ -240,3 +240,34 @@ ipc.handle('ontask-groq-key-clear', function (e) {
   ontaskGroqClient.clearStoredKey()
   return ontaskGroqClient.status()
 })
+
+/* first-run API key setup screen: show it once, when no key is configured
+   (env or stored) and the user hasn't already gone through setup. Never in
+   E2E mode (deterministic, keyless). */
+ipc.handle('ontask-key-setup-needed', function (e) {
+  ontaskIPC.requireChrome(e)
+  if (typeof isOnTaskE2EMode !== 'undefined' && isOnTaskE2EMode) {
+    return false
+  }
+  if (ontaskGroqClient.available()) {
+    return false
+  }
+  ontaskPersistence.load()
+  return !ontaskPersistence.data.keySetupDone
+})
+
+ipc.on('ontask-key-setup-done', function (e) {
+  ontaskIPC.requireChrome(e)
+  ontaskPersistence.load()
+  ontaskPersistence.data.keySetupDone = true
+  ontaskPersistence.save()
+})
+
+// open a fixed, safe external URL (the Groq console) in the system browser
+ipc.handle('ontask-open-external', function (e, url) {
+  ontaskIPC.requireChrome(e)
+  var allowed = ['https://console.groq.com/keys', 'https://console.groq.com/']
+  if (allowed.indexOf(String(url)) !== -1) {
+    shell.openExternal(String(url))
+  }
+})

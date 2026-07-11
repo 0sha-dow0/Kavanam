@@ -44,7 +44,8 @@ body {
 
 /* ---------- intake screen ---------- */
 
-#ontask-intake {
+#ontask-intake,
+#ontask-key-setup {
   position: fixed;
   inset: 0;
   z-index: 3000;
@@ -67,8 +68,92 @@ body {
     var(--ot-page);
 }
 
-#ontask-intake[hidden] {
+#ontask-intake[hidden],
+#ontask-key-setup[hidden] {
   display: none;
+}
+
+/* key-setup screen reuses the intake input/button look */
+#ontask-key-form {
+  display: flex;
+  gap: 10px;
+  margin-top: 26px;
+  width: min(460px, 100%);
+}
+
+#ontask-key-input {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--ot-font);
+  font-size: 15px;
+  color: var(--ot-ink);
+  background: var(--ot-card, #fff);
+  border: 1px solid var(--ot-line, #efe7e0);
+  border-radius: 14px;
+  padding: 13px 16px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+#ontask-key-input:focus {
+  border-color: var(--ot-accent, #b84268);
+  box-shadow: 0 0 0 3px rgba(184, 66, 104, 0.12);
+}
+
+#ontask-key-save {
+  font-family: var(--ot-font);
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--ot-accent, #b84268);
+  border: none;
+  border-radius: 14px;
+  padding: 13px 22px;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+#ontask-key-save:hover {
+  filter: brightness(1.05);
+}
+
+.ontask-key-error {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: #b84268;
+}
+
+.ontask-key-error[hidden] {
+  display: none;
+}
+
+.ontask-key-link {
+  margin-top: 18px;
+  background: none;
+  border: none;
+  font-family: var(--ot-font);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ot-accent, #b84268);
+  cursor: pointer;
+}
+
+.ontask-key-link:hover {
+  text-decoration: underline;
+}
+
+.ontask-key-skip {
+  margin-top: 10px;
+  background: none;
+  border: none;
+  font-family: var(--ot-font);
+  font-size: 13px;
+  color: var(--ot-ink-soft, #857e93);
+  cursor: pointer;
+}
+
+.ontask-key-skip:hover {
+  color: var(--ot-ink, #332b33);
 }
 
 .ontask-intake-drag {

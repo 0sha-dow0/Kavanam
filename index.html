@@ -539,6 +539,41 @@
 </div>
     </div>
 
+    <div id="ontask-key-setup" hidden>
+      <div class="ontask-intake-drag windowDragHandle"></div>
+      <div class="ontask-intake-inner">
+        <div class="ontask-intro-mark">
+          <div class="ontask-brand-mark">◎</div>
+          <div class="ontask-brand-name">OnTask</div>
+        </div>
+        <h1 class="ontask-intake-question">Connect your focus engine</h1>
+        <p class="ontask-intake-sub">
+          OnTask uses Groq to understand your task and decide what's relevant.
+          Paste a free Groq API key to turn it on. Most decisions still happen
+          on your machine — only the text needed to judge relevance is sent,
+          and your key is stored encrypted on this device.
+        </p>
+        <form id="ontask-key-form">
+          <input
+            id="ontask-key-input"
+            type="password"
+            autocomplete="off"
+            spellcheck="false"
+            placeholder="gsk_…"
+            aria-label="Your Groq API key"
+          />
+          <button id="ontask-key-save" type="submit">Connect</button>
+        </form>
+        <p id="ontask-key-error" class="ontask-key-error" hidden></p>
+        <button id="ontask-key-get" type="button" class="ontask-key-link">
+          Get a free key at console.groq.com/keys ↗
+        </button>
+        <button id="ontask-key-skip" type="button" class="ontask-key-skip">
+          Skip — run locally without Groq
+        </button>
+      </div>
+    </div>
+
     <div id="ontask-intake" hidden>
       <div class="ontask-intake-drag windowDragHandle"></div>
       <div class="ontask-intake-inner">
