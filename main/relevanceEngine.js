@@ -307,12 +307,19 @@ const ontaskRelevanceEngine = {
       } else if (band === 'on') {
         ontaskRelevanceEngine.verdictCache[cacheKey] = 'show'
         results.push({ id: scoredItem.id, verdict: 'show' })
-      } else if (band === 'off' && !lenient) {
+      } else if (score < ontaskRelevanceEngine.HARD_OFF && ontaskGroqClient.available()) {
+        // only CLEARLY unrelated content is hidden on the local score alone.
+        // anything that might be related to the task gets a Groq second
+        // opinion (below) — never hidden just for a low embedding score.
+        ontaskRelevanceEngine.verdictCache[cacheKey] = 'hide'
+        results.push({ id: scoredItem.id, verdict: 'hide' })
+      } else if (band === 'off' && !lenient && !ontaskGroqClient.available()) {
+        // degraded (no Groq): fall back to the local band decision
         ontaskRelevanceEngine.verdictCache[cacheKey] = 'hide'
         results.push({ id: scoredItem.id, verdict: 'hide' })
       } else {
-        // mid-band, and everything non-on on trusted pages: withhold and
-        // let Groq judge with the page context (Q8)
+        // possibly-related: withhold and let Groq judge relatedness with
+        // the task, its sub-tasks, and the page context (Q8)
         results.push({ id: scoredItem.id, verdict: 'pending' })
         ambiguous.push(scoredItem)
       }

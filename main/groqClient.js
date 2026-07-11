@@ -177,9 +177,9 @@ const ontaskGroqClient = {
       return (i + 1) + '. ' + String(item.text).slice(0, 200)
     }).join('\n')
     var content = await ontaskGroqClient.complete(
-      'You judge whether content items are relevant to the user\'s current task. ' +
-      'Mark "on" anything plausibly useful for the task or its sub-tasks — tools, services, guides, and results count even when their snippet reads like marketing. ' +
-      'Mark "off" only content clearly unrelated to the task. ' +
+      'You judge whether content items are RELATED to the user\'s current task. ' +
+      'Err on the side of keeping content: mark "on" anything related or plausibly useful to the task or any of its sub-tasks — background reading, related people, places, tools, services, guides, and results all count, even when the snippet reads like marketing or is only loosely connected. ' +
+      'Mark "off" ONLY for content that is clearly unrelated (entertainment, memes, shopping, off-topic news). When unsure, mark "on". ' +
       'Respond with JSON only, keyed by item number: {"verdicts": {"1": "on", "2": "off", ...}} — one entry per numbered item.',
       'Task: ' + task + (intent ? '\nTask intent: ' + intent : '') +
       (subtasks && subtasks.length ? '\nTask sub-tasks: ' + subtasks.join('; ') : '') +
