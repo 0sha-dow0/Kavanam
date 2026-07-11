@@ -54,8 +54,16 @@ var focusSession = {
       session.subtasks = expansion.subtasks || []
       session.keywords = expansion.keywords
       expansion.domains.forEach(function (d) {
-        if (session.allowlist.indexOf(d) === -1) {
-          session.allowlist.push(d)
+        // Groq sometimes returns phrases (" university websites") instead
+        // of bare domains: validate before they pollute the allowlist
+        var clean
+        try {
+          clean = ontaskIPC.cleanDomain(d)
+        } catch (e) {
+          return
+        }
+        if (session.allowlist.indexOf(clean) === -1) {
+          session.allowlist.push(clean)
         }
       })
       ontaskPersistence.onSessionUpdate(session)

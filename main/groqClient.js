@@ -135,9 +135,9 @@ const ontaskGroqClient = {
     var content = await ontaskGroqClient.complete(
       'You expand a user\'s work task into search intent for a focus tool. ' +
       'The task is typed by an individual person in their own web browser — interpret ambiguous ' +
-      'acronyms and shorthand as a person\'s personal task, not corporate jargon ' +
-      '(e.g. for a person, "sop" almost always means statement of purpose for university ' +
-      'applications, not standard operating procedure). Respond with JSON only: ' +
+      'acronyms and shorthand as the meaning an individual would most likely intend for a ' +
+      'personal task, not corporate or organizational jargon. Users write short prompts: infer ' +
+      'the fuller goal behind the words. Respond with JSON only: ' +
       '{"intent": "<one-sentence description of what content is relevant>", ' +
       '"subtasks": ["..up to 8 short sub-tasks a person doing this task would naturally also do (e.g. researching the people, places, requirements, and tools involved).."], ' +
       '"keywords": ["..up to 12 short keywords/phrases.."], ' +

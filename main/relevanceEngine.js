@@ -234,19 +234,29 @@ const ontaskRelevanceEngine = {
     pages the local tier only hides unambiguous junk; everything mid-band
     is judged by Groq WITH the page context.
     */
-    var lenientOffBar = ontaskRelevanceEngine.bands.off
-    // a search page that loaded at all was already judged on-task by the
-    // navigation guard (off-task searches are blocked before they load) —
-    // its results deserve leniency by construction
+    /*
+    Trusted pages: an approved search, an allowlisted host, or a host whose
+    page was ruled on-task. On them the local tier may not hide anything by
+    itself — bare titles ("Chemistry and Chemical Biology" on a graduate
+    programs page) embed near zero against any task, so Groq judges all
+    non-on items with the page context instead.
+    */
+    var lenient = false
     try {
-      if (pageURL && ontaskNavigationGuard.searchQueryOf(new URL(pageURL))) {
-        lenientOffBar = ontaskRelevanceEngine.HARD_OFF
+      var pageTarget = pageURL ? new URL(pageURL) : null
+      if (pageTarget && ontaskNavigationGuard.searchQueryOf(pageTarget)) {
+        lenient = true
+      } else if (pageTarget && session) {
+        var trustedHosts = (session.allowlist || []).concat(session.approvedHosts || [])
+        lenient = trustedHosts.some(function (d) {
+          return ontaskNavigationGuard.hostMatches(pageTarget.hostname, d)
+        })
       }
     } catch (e) {}
-    if (lenientOffBar !== ontaskRelevanceEngine.HARD_OFF && pageContext) {
+    if (!lenient && pageContext) {
       var contextScore = await ontaskRelevanceEngine.scoreText(pageContext, { taskOnly: true })
       if (contextScore !== null && contextScore >= ontaskRelevanceEngine.bands.on) {
-        lenientOffBar = ontaskRelevanceEngine.HARD_OFF
+        lenient = true
       }
     }
 
@@ -297,19 +307,19 @@ const ontaskRelevanceEngine = {
       } else if (band === 'on') {
         ontaskRelevanceEngine.verdictCache[cacheKey] = 'show'
         results.push({ id: scoredItem.id, verdict: 'show' })
-      } else if (band === 'off' && score < lenientOffBar) {
+      } else if (band === 'off' && !lenient) {
         ontaskRelevanceEngine.verdictCache[cacheKey] = 'hide'
         results.push({ id: scoredItem.id, verdict: 'hide' })
       } else {
-        // mid-band (including off-band items on an on-task page): withhold
-        // and let Groq judge with context (Q8)
+        // mid-band, and everything non-on on trusted pages: withhold and
+        // let Groq judge with the page context (Q8)
         results.push({ id: scoredItem.id, verdict: 'pending' })
         ambiguous.push(scoredItem)
       }
     }
     if (ambiguous.length) {
       // one batched Groq call per chunk — never one request per item
-      ontaskRelevanceEngine.tiebreakBatchLater(ambiguous, onUpdate, pageContext)
+      ontaskRelevanceEngine.tiebreakBatchLater(ambiguous, onUpdate, pageContext, lenient)
     }
     return results
   },
@@ -317,14 +327,15 @@ const ontaskRelevanceEngine = {
   TIEBREAK_CHUNK: 20,
   TIEBREAK_TIMEOUT: 15000,
 
-  tiebreakBatchLater: function (items, onUpdate, pageContext) {
+  tiebreakBatchLater: function (items, onUpdate, pageContext, lenient) {
     var session = focusSession.get()
     var task = ontaskRelevanceEngine.taskText
     var revision = ontaskRelevanceEngine.revision
     if (!ontaskGroqClient.available()) {
-      // degraded mode: stay decisive — ambiguous resolves to hidden
+      // degraded mode: decisive on untrusted pages, but never blank out a
+      // page that already earned trust
       onUpdate(items.map(function (item) {
-        return { id: item.id, verdict: 'hide' }
+        return { id: item.id, verdict: lenient ? 'show' : 'hide' }
       }))
       return
     }

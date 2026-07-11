@@ -465,11 +465,6 @@ ipc.on('ontask-primary-check', async function (e, payload) {
       }
       band = verdict === 'on' ? 'on' : 'off'
       console.log('ONTASK primary tiebreak:', band)
-      if (band === 'on' && session.approvedHosts &&
-          session.approvedHosts.indexOf(targetURL.hostname) === -1) {
-        // remember the host: later pages there skip the Groq round-trip
-        session.approvedHosts.push(targetURL.hostname)
-      }
     } catch (err) {
       band = 'ambiguous' // tiebreak outage: never block a page on a guess
     }
@@ -485,6 +480,16 @@ ipc.on('ontask-primary-check', async function (e, payload) {
     }
   } else if (band === 'on') {
     ontaskNavigationGuard.lastOnTaskURL[wc.id] = url
+    // an on-task page extends trust to its host: later pages there skip
+    // the round-trip, and content already judged strictly is re-judged
+    // with the lenient bar (its verdicts were cached before trust existed)
+    var onSession = focusSession.get()
+    if (onSession && onSession.approvedHosts &&
+        onSession.approvedHosts.indexOf(targetURL.hostname) === -1) {
+      onSession.approvedHosts.push(targetURL.hostname)
+      console.log('ONTASK host approved on-task:', targetURL.hostname)
+      ontaskRelevanceEngine.invalidate()
+    }
   }
 })
 
