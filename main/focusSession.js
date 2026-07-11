@@ -20,6 +20,7 @@ var focusSession = {
       startedAt: Date.now()
     }
     console.log('ONTASK session started:', task)
+    ontaskPersistence.onSessionStart(focusSession.session)
     return focusSession.session
   },
 
@@ -39,6 +40,9 @@ var focusSession = {
 
   end: function () {
     console.log('ONTASK session ended')
+    if (focusSession.session) {
+      ontaskPersistence.onSessionUpdate(focusSession.session)
+    }
     focusSession.session = null
   },
 

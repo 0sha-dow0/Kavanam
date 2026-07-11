@@ -12,6 +12,8 @@ const intake = {
   container: document.getElementById('ontask-intake'),
   form: document.getElementById('ontask-intake-form'),
   input: document.getElementById('ontask-intake-input'),
+  resumeButton: document.getElementById('ontask-intake-resume'),
+  resumeTask: document.getElementById('ontask-resume-task'),
 
   show: function () {
     intake.container.hidden = false
@@ -20,6 +22,13 @@ const intake = {
     } catch (e) {
       // no tab selected yet at early startup; the request is still registered
     }
+    // offer resuming the previous session's task if one was persisted
+    ipc.invoke('ontask-get-last-task').then(function (lastTask) {
+      if (lastTask && !intake.container.hidden) {
+        intake.resumeTask.textContent = lastTask
+        intake.resumeButton.hidden = false
+      }
+    })
     setTimeout(function () {
       intake.input.focus()
     }, 0)
@@ -30,17 +39,25 @@ const intake = {
     webviews.hidePlaceholder('ontaskIntake')
   },
 
-  onSubmit: async function (e) {
+  startSession: async function (task) {
+    await ipc.invoke('ontask-start-session', task)
+    console.log('ONTASK intake: session started with task:', task)
+    intake.hide()
+    window.dispatchEvent(new CustomEvent('ontask-session-changed'))
+  },
+
+  onSubmit: function (e) {
     e.preventDefault()
     const task = intake.input.value.trim()
     if (!task) {
       intake.input.focus()
       return
     }
-    await ipc.invoke('ontask-start-session', task)
-    console.log('ONTASK intake: session started with task:', task)
-    intake.hide()
-    window.dispatchEvent(new CustomEvent('ontask-session-changed'))
+    intake.startSession(task)
+  },
+
+  onResume: function () {
+    intake.startSession(intake.resumeTask.textContent)
   },
 
   initialize: function () {
@@ -55,6 +72,7 @@ const intake = {
     })
 
     intake.form.addEventListener('submit', intake.onSubmit)
+    intake.resumeButton.addEventListener('click', intake.onResume)
   }
 }
 
