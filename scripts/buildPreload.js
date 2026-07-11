@@ -15,6 +15,7 @@ const modules = [
   'js/preload/adapterRegistry.js',
   'js/preload/adapters/youtube.js',
   'js/preload/bridge.js',
+  'js/preload/activityTracker.js',
   'js/preload/domReader.js',
   'js/preload/surfaceApplier.js',
 ]

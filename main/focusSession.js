@@ -15,6 +15,7 @@ var focusSession = {
     if (!task) {
       throw new Error('A focus task is required')
     }
+    var now = Date.now()
     focusSession.session = {
       task: task,
       taskEmbedding: null,
@@ -24,45 +25,45 @@ var focusSession = {
       subtaskEmbedding: null,
       allowlist: [],
       overrides: [],
-      startedAt: Date.now()
+      startedAt: now,
+      openedAt: now,
+      totalFocusMs: 0,
+      currentFocusMs: 0
     }
     console.log('ONTASK session started:', task)
     ontaskPersistence.onSessionStart(focusSession.session)
 
     // local task embedding (never blocks session start)
     ontaskRelevanceEngine.onSessionStart(task)
-    focusSession.runGoalExpansion(focusSession.session)
-    return focusSession.session
-  },
 
-  // Groq goal expansion: intent + keywords + seed allowlist (Q16);
-  // unreachable Groq -> local-only degraded mode (Q28). Runs on start AND
-  // resume — a resumed session must judge as sharply as a fresh one.
-  runGoalExpansion: function (session) {
-    if (!ontaskGroqClient.available()) {
-      console.log('ONTASK no Groq key — local-only degraded mode')
-      return
-    }
-    ontaskGroqClient.expandGoal(session.task).then(function (expansion) {
-      if (focusSession.session !== session) {
-        return
-      }
-      session.expandedIntent = expansion.intent
-      session.keywords = expansion.keywords
-      expansion.domains.forEach(function (d) {
-        if (session.allowlist.indexOf(d) === -1) {
-          session.allowlist.push(d)
+    // Groq goal expansion: intent + keywords + seed allowlist (Q16);
+    // unreachable Groq -> local-only degraded mode (Q28)
+    if (ontaskGroqClient.available()) {
+      var startedSession = focusSession.session
+      ontaskGroqClient.expandGoal(task).then(function (expansion) {
+        if (focusSession.session !== startedSession) {
+          return
         }
+        startedSession.expandedIntent = expansion.intent
+        startedSession.keywords = expansion.keywords
+        expansion.domains.forEach(function (d) {
+          if (startedSession.allowlist.indexOf(d) === -1) {
+            startedSession.allowlist.push(d)
+          }
+        })
+        ontaskPersistence.onSessionUpdate(startedSession)
+        ontaskRelevanceEngine.onGoalExpanded(startedSession)
+        console.log('ONTASK goal expanded:', JSON.stringify({ intent: expansion.intent, keywords: expansion.keywords, allowlist: startedSession.allowlist }))
+        try {
+          sendIPCToWindow(windows.getCurrent(), 'ontask-session-changed', {})
+        } catch (e) {}
+      }).catch(function (err) {
+        console.warn('ONTASK goal expansion failed, local-only degraded mode:', err.message)
       })
-      ontaskPersistence.onSessionUpdate(session)
-      ontaskRelevanceEngine.onGoalExpanded(session)
-      console.log('ONTASK goal expanded:', JSON.stringify({ intent: expansion.intent, keywords: expansion.keywords, allowlist: session.allowlist }))
-      try {
-        sendIPCToWindow(windows.getCurrent(), 'ontask-session-changed', {})
-      } catch (e) {}
-    }).catch(function (err) {
-      console.warn('ONTASK goal expansion failed, local-only degraded mode:', err.message)
-    })
+    } else {
+      console.log('ONTASK no Groq key — local-only degraded mode')
+    }
+    return focusSession.session
   },
 
   resume: function (saved) {
@@ -81,11 +82,13 @@ var focusSession = {
       subtaskEmbedding: null,
       allowlist: Array.isArray(saved.allowlist) ? saved.allowlist.slice() : [],
       overrides: Array.isArray(saved.overrides) ? saved.overrides.slice() : [],
-      startedAt: Number(saved.startedAt) || Date.now()
+      startedAt: Number(saved.startedAt) || Date.now(),
+      openedAt: Date.now(),
+      totalFocusMs: Math.max(0, Number(saved.totalFocusMs) || 0),
+      currentFocusMs: 0
     }
     ontaskPersistence.onSessionUpdate(focusSession.session)
     ontaskRelevanceEngine.onSessionStart(focusSession.session.task)
-    focusSession.runGoalExpansion(focusSession.session)
     console.log('ONTASK session resumed:', focusSession.session.task)
     return focusSession.session
   },
@@ -101,6 +104,15 @@ var focusSession = {
   setSubtask: function (subtask) {
     if (focusSession.session) {
       focusSession.session.subtask = subtask
+    }
+  },
+
+  updateCurrentFocusMs: function (milliseconds) {
+    if (focusSession.session && Number.isFinite(Number(milliseconds))) {
+      focusSession.session.currentFocusMs = Math.max(
+        focusSession.session.currentFocusMs,
+        Number(milliseconds)
+      )
     }
   },
 
@@ -130,40 +142,51 @@ var focusSession = {
       keywords: focusSession.session.keywords,
       allowlist: focusSession.session.allowlist,
       overrides: focusSession.session.overrides,
-      startedAt: focusSession.session.startedAt
+      startedAt: focusSession.session.startedAt,
+      openedAt: focusSession.session.openedAt,
+      totalFocusMs: focusSession.session.totalFocusMs,
+      currentFocusMs: focusSession.session.currentFocusMs
     }
   }
 }
 
-ipc.handle('ontask-get-session', function (e) {
-  ontaskIPC.requireChrome(e)
+ipc.handle('ontask-get-session', function () {
   return focusSession.publicState()
+})
+
+ipc.on('ontask-focus-heartbeat', function (e, currentFocusMs) {
+  if (focusSession.session) {
+    focusSession.updateCurrentFocusMs(currentFocusMs)
+    ontaskPersistence.onSessionUpdate(focusSession.session)
+  }
+})
+
+ipc.on('ontask-user-activity', function () {
+  try {
+    sendIPCToWindow(windows.getCurrent(), 'ontask-user-activity', {})
+  } catch (e) {}
 })
 
 ipc.handle('ontask-start-session', function (e, task) {
-  ontaskIPC.requireChrome(e)
-  ontaskIPC.take(e, 'session', 5, 60000)
-  focusSession.start(ontaskIPC.cleanTask(task))
+  focusSession.start(task)
   return focusSession.publicState()
 })
 
-ipc.handle('ontask-resume-session', function (e) {
-  ontaskIPC.requireChrome(e)
-  ontaskIPC.take(e, 'session', 5, 60000)
-  focusSession.resume(ontaskPersistence.getLastSession())
+ipc.handle('ontask-resume-session', function (e, startedAt) {
+  var saved = startedAt
+    ? ontaskPersistence.getSession(startedAt)
+    : ontaskPersistence.getLastSession()
+  focusSession.resume(saved)
   return focusSession.publicState()
 })
 
-ipc.handle('ontask-end-session', function (e) {
-  ontaskIPC.requireChrome(e)
-  ontaskIPC.take(e, 'session', 5, 60000)
+ipc.handle('ontask-end-session', function (e, currentFocusMs) {
+  focusSession.updateCurrentFocusMs(currentFocusMs)
   focusSession.end()
   return null
 })
 
 ipc.handle('ontask-override-add', function (e, record) {
-  ontaskIPC.take(e, 'override', 30, 60000)
-  record = ontaskIPC.cleanOverride(e, record)
   var session = focusSession.get()
   if (!session || !record || !record.page || !record.id) {
     return false
@@ -179,8 +202,6 @@ ipc.handle('ontask-override-add', function (e, record) {
 })
 
 ipc.handle('ontask-override-remove', function (e, record) {
-  ontaskIPC.take(e, 'override', 30, 60000)
-  record = ontaskIPC.cleanOverride(e, record)
   var session = focusSession.get()
   if (!session || !record) {
     return false
@@ -192,14 +213,12 @@ ipc.handle('ontask-override-remove', function (e, record) {
   return true
 })
 
-ipc.handle('ontask-first-run', function (e) {
-  ontaskIPC.requireChrome(e)
+ipc.handle('ontask-first-run', function () {
   ontaskPersistence.load()
   return !ontaskPersistence.data.firstRunDone
 })
 
-ipc.on('ontask-first-run-done', function (e) {
-  ontaskIPC.requireChrome(e)
+ipc.on('ontask-first-run-done', function () {
   ontaskPersistence.load()
   ontaskPersistence.data.firstRunDone = true
   ontaskPersistence.save()
