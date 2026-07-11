@@ -40,6 +40,7 @@ const intake = {
     await ipc.invoke('ontask-start-session', task)
     console.log('ONTASK intake: session started with task:', task)
     intake.hide()
+    window.dispatchEvent(new CustomEvent('ontask-session-changed'))
   },
 
   initialize: function () {
