@@ -121,5 +121,19 @@ var ontaskGenericExtractor = {
 
   extractText: function (node) {
     return (node.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 500)
+  },
+
+  // what is this page ABOUT: title + h1 + meta description (for Q15)
+  mainContentText: function () {
+    var parts = [document.title || '']
+    var h1 = document.querySelector('h1')
+    if (h1) {
+      parts.push(h1.textContent || '')
+    }
+    var meta = document.querySelector('meta[name="description"], meta[property="og:description"]')
+    if (meta) {
+      parts.push(meta.getAttribute('content') || '')
+    }
+    return parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 600)
   }
 }

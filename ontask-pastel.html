@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OnTask — focus browser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* --- one accent, used sparingly (Dia-style). swap this to recolor: try #7C6BE0 lilac or #E39A4B amber --- */
+    --accent:#E8799F;
+    --accent-strong:#B84268;
+    --accent-soft:#FBE8F0;
+    --accent-ink:#9E3159;
+
+    --peach-soft:#FDEBD6; --peach-ink:#9A6314;
+    --lilac-soft:#EDE6FA; --lilac-ink:#5E4C97;
+    --mint-soft:#DDF1E5; --mint-ink:#2E7D57;
+
+    --page:#FBF7F2;
+    --canvas:#FFFFFF;
+    --sidebar:#F6EFEA;
+    --ink:#332B33;
+    --ink-soft:#847B85;
+    --ink-faint:#B7AEB6;
+    --line:#EFE7E0;
+    --line-soft:#F7F1EB;
+
+    --r-lg:22px; --r-md:15px; --r-sm:11px;
+    --sidebar-w:252px;
+    --font:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--font);color:var(--ink);background:var(--page);
+    -webkit-font-smoothing:antialiased;padding:14px;height:100vh;overflow:hidden;
+  }
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+  /* ---------------- INTRO: set your task ---------------- */
+  .intro{
+    height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:0 24px;
+  }
+  .intro-mark{display:flex;align-items:center;gap:9px;margin-bottom:40px}
+  .intro-mark .m{width:28px;height:28px;border-radius:9px;background:var(--accent-soft);display:grid;place-items:center;color:var(--accent-strong);font-size:16px}
+  .intro-mark .n{font-weight:800;font-size:17px;letter-spacing:-.02em}
+  .intro h1{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.2;max-width:14ch}
+  .intro p{font-size:14.5px;color:var(--ink-soft);margin-top:14px;max-width:42ch;line-height:1.55;font-weight:500}
+  .task-form{display:flex;gap:10px;margin-top:32px;width:100%;max-width:460px}
+  .task-input{
+    flex:1;background:var(--canvas);border:1px solid var(--line);border-radius:999px;
+    padding:14px 20px;font-family:var(--font);font-size:14.5px;color:var(--ink);outline:none;
+    transition:border-color .15s,box-shadow .15s;
+  }
+  .task-input::placeholder{color:var(--ink-faint)}
+  .task-input:focus{border-color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+  .task-go{
+    background:var(--accent-strong);color:#fff;border:none;border-radius:999px;
+    padding:14px 22px;font-family:var(--font);font-size:14.5px;font-weight:700;cursor:pointer;
+    white-space:nowrap;transition:transform .1s,filter .15s;
+  }
+  .task-go:hover{filter:brightness(1.05)}
+  .task-go:active{transform:scale(.97)}
+
+  /* ---------------- APP SHELL ---------------- */
+  .app{height:100%;display:none}
+  .app.show{display:flex}
+
+  .sidebar{
+    width:var(--sidebar-w);flex-shrink:0;background:var(--sidebar);border-radius:var(--r-lg);
+    padding:16px 13px 13px;display:flex;flex-direction:column;
+  }
+  .dots{display:flex;gap:8px;padding:2px 5px 16px}
+  .dots span{width:11px;height:11px;border-radius:50%;background:#E4DAD1}
+
+  .brand{display:flex;align-items:center;gap:9px;padding:0 6px 16px}
+  .brand .m{width:26px;height:26px;border-radius:9px;background:var(--accent-soft);display:grid;place-items:center;color:var(--accent-strong);font-size:15px}
+  .brand .n{font-weight:800;font-size:16px;letter-spacing:-.02em}
+
+  /* signature: the pinned task for the whole session */
+  .focus{background:var(--canvas);border:1px solid var(--line);border-radius:var(--r-md);padding:13px 15px 14px;margin-bottom:22px}
+  .focus-label{font-size:11px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--accent-strong);display:flex;align-items:center;gap:6px;margin-bottom:7px}
+  .focus-goal{font-size:15px;font-weight:700;line-height:1.35;letter-spacing:-.01em;color:var(--ink)}
+  .focus-sub{display:flex;align-items:center;gap:8px;margin-top:11px;font-size:12.5px;color:var(--ink-soft);font-weight:500}
+  .pulse{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 0 var(--accent);animation:pulse 2.6s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(232,121,159,.5)}70%{box-shadow:0 0 0 7px rgba(232,121,159,0)}100%{box-shadow:0 0 0 0 rgba(232,121,159,0)}}
+
+  .side-label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);padding:0 8px 8px}
+  .tabs{display:flex;flex-direction:column;gap:3px}
+  .tab{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:var(--r-sm);font-size:13px;font-weight:500;color:var(--ink-soft);cursor:pointer;transition:background .15s,transform .1s}
+  .tab .ic{font-size:14px;flex-shrink:0}
+  .tab .ttl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tab:hover{background:#EFE7E0}
+  .tab:active{transform:scale(.98)}
+  .tab.active{background:var(--canvas);color:var(--accent-strong);font-weight:700;box-shadow:inset 3px 0 0 var(--accent)}
+  .tab.newtab{color:var(--ink-faint);font-weight:600}
+
+  .side-foot{margin-top:auto;padding-top:14px;display:flex;flex-direction:column;gap:10px}
+  .timer{display:flex;align-items:center;justify-content:space-between;padding:0 8px;font-size:12px;color:var(--ink-soft);font-weight:600}
+  .timer b{color:var(--accent-strong);font-weight:700}
+  .end-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:11px;border-radius:var(--r-sm);border:1px solid var(--line);background:transparent;color:var(--ink-soft);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:background .15s}
+  .end-btn:hover{background:#EFE7E0}
+
+  .canvas{flex:1;min-width:0;margin-left:14px;background:var(--canvas);border-radius:var(--r-lg);display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--line)}
+  .toolbar{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .nav-btn{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;color:var(--ink-soft);font-size:18px;cursor:pointer;transition:background .15s}
+  .nav-btn:hover{background:var(--line-soft)}
+  .nav-btn.off{color:var(--ink-faint);cursor:default}
+  .url{flex:1;display:flex;align-items:center;gap:9px;min-width:0;background:var(--page);border-radius:999px;padding:9px 16px;font-size:13px;color:var(--ink-soft);font-weight:500}
+  .url .addr{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .status{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;font-size:13px;font-weight:700;background:var(--mint-soft);color:var(--mint-ink);cursor:pointer;user-select:none;transition:transform .1s}
+  .status:active{transform:scale(.97)}
+  .status .sdot{width:8px;height:8px;border-radius:50%;background:var(--mint-ink)}
+  .status.off{background:var(--peach-soft);color:var(--peach-ink)}
+  .status.off .sdot{background:var(--peach-ink)}
+
+  .page{padding:22px 26px;overflow-y:auto;flex:1}
+  .player{background:#EFE7E0;border-radius:var(--r-md);aspect-ratio:16/8;display:grid;place-items:center}
+  .play{width:60px;height:60px;border-radius:50%;background:var(--canvas);display:grid;place-items:center;color:var(--accent-strong);font-size:24px;border:1px solid var(--line)}
+  .vid-title{font-size:18px;font-weight:700;letter-spacing:-.01em;margin:16px 0 4px}
+  .vid-meta{font-size:13px;color:var(--ink-soft);font-weight:500}
+
+  .rail{margin-top:26px}
+  .rail-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .rail-head h2{font-size:15px;font-weight:700;letter-spacing:-.01em}
+  .rail-tag{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--accent-strong)}
+  .rail-tag.off{color:var(--ink-faint);font-weight:600}
+  .rec{display:flex;gap:13px;align-items:center;padding:8px;border-radius:var(--r-sm);transition:background .15s}
+  .rec:hover{background:var(--line-soft)}
+  .rec-thumb{width:112px;height:63px;flex-shrink:0;border-radius:9px;background:var(--accent-soft)}
+  .rec-thumb.dull{background:#EEEAE5}
+  .rec-body .rt{font-size:13.5px;font-weight:600;line-height:1.35}
+  .rec-body .rm{font-size:12px;color:var(--ink-faint);margin-top:3px;font-weight:500}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .calm{display:flex;align-items:center;gap:10px;margin-top:14px;padding:13px 16px;background:var(--lilac-soft);border-radius:var(--r-md);font-size:13px;color:var(--lilac-ink);font-weight:500}
+  .calm .ci{font-size:16px}
+  .hidden{display:none}
+  .note{margin-top:20px;font-size:12.5px;color:var(--ink-faint);text-align:center;font-weight:500}
+  .toggle-hint{color:var(--accent-strong);font-weight:700;cursor:pointer}
+
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  :focus-visible{outline:2px solid var(--accent-strong);outline-offset:2px}
+</style>
+</head>
+<body>
+<p class="sr-only">OnTask focus browser prototype. Set one task for the session, then the browser keeps pages, links, and recommendations pointed at it. Toggle the status badge to compare the curated feed with the raw one.</p>
+
+<!-- INTRO -->
+<section class="intro" id="intro">
+  <div class="intro-mark"><div class="m">◎</div><div class="n">OnTask</div></div>
+  <h1>What are you working on today?</h1>
+  <p>One task, set once. The whole browser stays pointed at it — pages, links, and recommendations. Nothing leaves your machine.</p>
+  <div class="task-form">
+    <input class="task-input" id="task-input" type="text" placeholder="Write my statement of purpose" aria-label="Your task for this session" autocomplete="off">
+    <button class="task-go" id="task-go">Start focus</button>
+  </div>
+</section>
+
+<!-- APP -->
+<div class="app" id="app">
+  <aside class="sidebar">
+    <div class="dots"><span></span><span></span><span></span></div>
+    <div class="brand"><div class="m">◎</div><div class="n">OnTask</div></div>
+
+    <div class="focus">
+      <div class="focus-label">◈ Today's focus</div>
+      <div class="focus-goal" id="focus-goal">Write my statement of purpose</div>
+      <div class="focus-sub"><span class="pulse"></span>Now: structuring the SOP</div>
+    </div>
+
+    <div class="side-label">Open tabs</div>
+    <div class="tabs">
+      <div class="tab active"><span class="ic">▶</span><span class="ttl">Writing a strong SOP</span></div>
+      <div class="tab"><span class="ic">▤</span><span class="ttl">SOP draft — Docs</span></div>
+      <div class="tab"><span class="ic">◔</span><span class="ttl">Program requirements</span></div>
+      <div class="tab newtab"><span class="ic">＋</span><span class="ttl">New tab</span></div>
+    </div>
+
+    <div class="side-foot">
+      <div class="timer"><span>In focus</span><b>1h 12m</b></div>
+      <button class="end-btn">⏻ End focus session</button>
+    </div>
+  </aside>
+
+  <main class="canvas">
+    <div class="toolbar">
+      <div class="nav-btn" title="Back">‹</div>
+      <div class="nav-btn off" title="Forward">›</div>
+      <div class="url"><span>🔒</span><span class="addr">videos.example.com/watch?v=strong-sop</span></div>
+      <div class="status" id="status" role="button" tabindex="0" aria-pressed="true"><span class="sdot"></span><span id="status-txt">On task</span></div>
+    </div>
+
+    <div class="page">
+      <div class="player"><div class="play">▶</div></div>
+      <div class="vid-title">How to write a strong statement of purpose</div>
+      <div class="vid-meta">Grad School Guides · 84K views</div>
+
+      <section class="rail" id="rail-on">
+        <div class="rail-head"><h2>Up next</h2><span class="rail-tag">⛃ curated for your task</span></div>
+        <div class="rec"><div class="rec-thumb"></div><div class="rec-body"><div class="rt">Common SOP mistakes reviewers reject</div><div class="rm">Grad School Guides · 51K views</div></div></div>
+        <div class="rec"><div class="rec-thumb"></div><div class="rec-body"><div class="rt">Structuring your opening paragraph</div><div class="rm">The Writing Lab · 38K views</div></div></div>
+        <div class="calm"><span class="ci">◔</span><span>11 off-task suggestions hidden. A calm panel is the tool working — not a bug.</span></div>
+      </section>
+
+      <section class="rail hidden" id="rail-off">
+        <div class="rail-head"><h2>Up next</h2><span class="rail-tag off">unfiltered feed</span></div>
+        <div class="grid">
+          <div class="rec"><div class="rec-thumb dull"></div><div class="rec-body"><div class="rt">Try not to laugh challenge #47</div><div class="rm">2.1M views</div></div></div>
+          <div class="rec"><div class="rec-thumb dull"></div><div class="rec-body"><div class="rt">Structuring your opening paragraph</div><div class="rm">38K views</div></div></div>
+          <div class="rec"><div class="rec-thumb dull"></div><div class="rec-body"><div class="rt">I bought every gadget on the internet</div><div class="rm">4.7M views</div></div></div>
+          <div class="rec"><div class="rec-thumb dull"></div><div class="rec-body"><div class="rt">Common SOP mistakes reviewers reject</div><div class="rm">51K views</div></div></div>
+          <div class="rec"><div class="rec-thumb dull"></div><div class="rec-body"><div class="rt">10 hours of rain sounds</div><div class="rm">890K views</div></div></div>
+          <div class="rec"><div class="rec-thumb dull"></div><div class="rec-body"><div class="rt">Ranking every fast food fry</div><div class="rm">3.3M views</div></div></div>
+        </div>
+      </section>
+
+      <div class="note">Prototype. Tap the <span class="toggle-hint" id="toggle">On&nbsp;task</span> badge to see the raw feed OnTask filters out.</div>
+    </div>
+  </main>
+</div>
+
+<script>
+  const intro=document.getElementById('intro');
+  const app=document.getElementById('app');
+  const input=document.getElementById('task-input');
+  const go=document.getElementById('task-go');
+  const goal=document.getElementById('focus-goal');
+
+  function start(){
+    const v=(input.value||input.placeholder).trim();
+    goal.textContent=v;
+    intro.style.display='none';
+    app.classList.add('show');
+  }
+  go.addEventListener('click',start);
+  input.addEventListener('keydown',e=>{if(e.key==='Enter')start();});
+
+  const status=document.getElementById('status');
+  const statusTxt=document.getElementById('status-txt');
+  const railOn=document.getElementById('rail-on');
+  const railOff=document.getElementById('rail-off');
+  const toggle=document.getElementById('toggle');
+  let on=true;
+  function apply(){
+    if(on){status.classList.remove('off');status.setAttribute('aria-pressed','true');statusTxt.textContent='On task';railOn.classList.remove('hidden');railOff.classList.add('hidden');}
+    else{status.classList.add('off');status.setAttribute('aria-pressed','false');statusTxt.textContent='Off task';railOn.classList.add('hidden');railOff.classList.remove('hidden');}
+  }
+  function flip(){on=!on;apply();}
+  status.addEventListener('click',flip);
+  status.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();flip();}});
+  toggle.addEventListener('click',flip);
+</script>
+</body>
+</html>

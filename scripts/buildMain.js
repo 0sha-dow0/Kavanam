@@ -25,7 +25,10 @@ const modules = [
   'js/util/proxy.js',
   'main/themeMain.js',
   'main/persistence.js',
-  'main/focusSession.js'
+  'main/groqClient.js',
+  'main/relevanceEngine.js',
+  'main/focusSession.js',
+  'main/navigationGuard.js'
 ]
 
 function buildMain () {

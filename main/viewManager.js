@@ -381,6 +381,14 @@ function loadURLInView (id, url, win) {
 
 ipc.on('loadURLInView', function (e, args) {
   const win = windows.windowFromContents(e.sender)?.win
+  // OnTask: address-bar navigations bypass will-navigate, so guard here too
+  const currentURL = viewMap[args.id] ? viewMap[args.id].webContents.getURL() : ''
+  const decision = ontaskNavigationGuard.decide(args.url, currentURL)
+  if (!decision.allow) {
+    console.log('ONTASK nav: BLOCK (addressbar,', decision.reason + ')', String(args.url).slice(0, 100))
+    ontaskNavigationGuard.notifyChrome('ontask-nav-blocked', { url: args.url })
+    return
+  }
   loadURLInView(args.id, args.url, win)
 })
 

@@ -14,6 +14,8 @@ const intake = {
   input: document.getElementById('ontask-intake-input'),
   resumeButton: document.getElementById('ontask-intake-resume'),
   resumeTask: document.getElementById('ontask-resume-task'),
+  firstRunCard: document.getElementById('ontask-first-run'),
+  firstRunOk: document.getElementById('ontask-first-run-ok'),
 
   show: function () {
     intake.container.hidden = false
@@ -27,6 +29,12 @@ const intake = {
       if (lastTask && !intake.container.hidden) {
         intake.resumeTask.textContent = lastTask
         intake.resumeButton.hidden = false
+      }
+    })
+    // one short first-run card: fallibility + honest data statement (Q37)
+    ipc.invoke('ontask-first-run').then(function (isFirstRun) {
+      if (isFirstRun && !intake.container.hidden) {
+        intake.firstRunCard.hidden = false
       }
     })
     setTimeout(function () {
@@ -73,6 +81,19 @@ const intake = {
 
     intake.form.addEventListener('submit', intake.onSubmit)
     intake.resumeButton.addEventListener('click', intake.onResume)
+    intake.firstRunOk.addEventListener('click', function () {
+      ipc.send('ontask-first-run-done')
+      intake.firstRunCard.hidden = true
+    })
+
+    // ending a session brings the intake back (only path to a new task, Q3)
+    window.addEventListener('ontask-session-changed', function () {
+      ipc.invoke('ontask-get-session').then(function (session) {
+        if (!session && intake.container.hidden) {
+          intake.show()
+        }
+      })
+    })
   }
 }
 

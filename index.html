@@ -141,6 +141,10 @@
         <div id="tabs-inner" role="tablist" class="has-thin-scrollbar"></div>
       </div>
       <div class="navbar-right-actions">
+        <div id="ontask-status-badge" hidden>
+          <span class="ontask-sdot"></span>
+          <span id="ontask-status-text">On task</span>
+        </div>
         <button
           id="add-tab-button"
           class="navbar-action-button i carbon:add"
@@ -190,11 +194,29 @@
       <div class="top-answer-area"></div>
     </div>
 
-    <div id="ontask-focus-bar" hidden>
-      <span class="ontask-focus-dot"></span>
-      <div class="ontask-focus-text">
-        <span id="ontask-focus-task"></span>
-        <span id="ontask-focus-subtask" hidden></span>
+    <div id="ontask-sidebar" hidden>
+      <div class="ontask-brand">
+        <div class="ontask-brand-mark">◎</div>
+        <div class="ontask-brand-name">OnTask</div>
+      </div>
+      <div class="ontask-focus-card">
+        <div class="ontask-focus-label">◈ Today's focus</div>
+        <div class="ontask-focus-goal" id="ontask-focus-task"></div>
+        <div class="ontask-focus-sub">
+          <span class="ontask-pulse"></span>
+          <span id="ontask-focus-subtask">Getting started</span>
+        </div>
+      </div>
+      <div class="ontask-side-label">Open tabs</div>
+      <div id="ontask-tab-slot"></div>
+      <div class="ontask-side-label ontask-allow-label">Allowed sites</div>
+      <div id="ontask-allowlist"></div>
+      <form id="ontask-allow-form">
+        <input id="ontask-allow-input" placeholder="add a domain…" autocomplete="off" spellcheck="false" />
+      </form>
+      <div class="ontask-side-foot">
+        <div class="ontask-timer"><span>In focus</span><b id="ontask-timer-val">0m</b></div>
+        <button id="ontask-end-btn">⏻ End focus session</button>
       </div>
     </div>
 
@@ -354,18 +376,23 @@
     <div id="ontask-intake" hidden>
       <div class="ontask-intake-drag windowDragHandle"></div>
       <div class="ontask-intake-inner">
-        <div class="ontask-wordmark">
-          <span class="ontask-focus-dot"></span>
-          OnTask
+        <div class="ontask-intro-mark">
+          <div class="ontask-brand-mark">◎</div>
+          <div class="ontask-brand-name">OnTask</div>
         </div>
         <h1 class="ontask-intake-question">What are you working on today?</h1>
+        <p class="ontask-intake-sub">
+          One task, set once. The whole browser stays pointed at it — pages,
+          links, and recommendations.
+        </p>
         <form id="ontask-intake-form">
           <input
             id="ontask-intake-input"
             type="text"
             autocomplete="off"
             spellcheck="false"
-            placeholder="e.g. Write my statement of purpose"
+            placeholder="Write my statement of purpose"
+            aria-label="Your task for this session"
           />
           <button id="ontask-intake-start" type="submit">Start focus</button>
         </form>
@@ -373,9 +400,15 @@
           <span class="ontask-resume-eyebrow">Resume last session</span>
           <span id="ontask-resume-task"></span>
         </button>
-        <p class="ontask-intake-hint">
-          One task per session. Everything off-task stays out of sight.
-        </p>
+        <div id="ontask-first-run" hidden>
+          <p>
+            OnTask can be wrong sometimes — the interventions are the point.
+            It decides most things on your machine; to judge relevance it
+            sends your task and the titles of what's being checked to Groq.
+            No history harvesting, no ads, zero telemetry.
+          </p>
+          <button id="ontask-first-run-ok" type="button">Got it</button>
+        </div>
       </div>
     </div>
 

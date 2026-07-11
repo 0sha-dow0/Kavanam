@@ -24,6 +24,12 @@ var ontaskYouTubeAdapter = {
     if (loc.pathname === '/watch') {
       return 'watch'
     }
+    if (loc.pathname === '/') {
+      return 'home'
+    }
+    if (loc.pathname === '/results') {
+      return 'search'
+    }
     return null
   },
 
@@ -31,6 +37,13 @@ var ontaskYouTubeAdapter = {
     watch: [
       'ytd-watch-next-secondary-results-renderer yt-lockup-view-model',
       'ytd-watch-next-secondary-results-renderer ytd-compact-video-renderer'
+    ],
+    home: [
+      'ytd-rich-grid-renderer ytd-rich-item-renderer'
+    ],
+    search: [
+      'ytd-section-list-renderer ytd-video-renderer',
+      'ytd-section-list-renderer yt-lockup-view-model'
     ]
   },
 
@@ -66,6 +79,57 @@ var ontaskYouTubeAdapter = {
   extractText: function (node) {
     var text = node.innerText || ''
     return text.replace(/\s+/g, ' ').trim()
+  },
+
+  // watch page: video title + channel drive the primary-content judgment (Q15)
+  mainContentText: function () {
+    if (ontaskYouTubeAdapter.surface(window.location) !== 'watch') {
+      return null
+    }
+    var title = document.querySelector('ytd-watch-metadata h1, h1.ytd-watch-metadata, #title h1')
+    var channel = document.querySelector('ytd-watch-metadata #channel-name, #owner #channel-name')
+    var parts = []
+    if (title) {
+      parts.push(title.textContent || '')
+    }
+    if (channel) {
+      parts.push(channel.textContent || '')
+    }
+    if (!parts.length) {
+      return null
+    }
+    return parts.join(' ').replace(/\s+/g, ' ').trim().slice(0, 400)
+  },
+
+  /* autoplay interception (Q24): when a video ends, judge the queued next
+     target; off-task -> cancel the countdown and pause. The navigation
+     guard's primary-content check is the backstop if it slips through. */
+  init: function () {
+    document.addEventListener('ended', function (e) {
+      if (!e.target || e.target.tagName !== 'VIDEO') {
+        return
+      }
+      var video = e.target
+      var next = document.querySelector('a.ytp-next-button')
+      var nextText = next ? (next.getAttribute('aria-label') || next.title || next.href || '') : ''
+      if (!nextText) {
+        return
+      }
+      ontaskBridge.scoreText(nextText).then(function (result) {
+        if (result && result.band === 'off') {
+          console.log('ONTASK autoplay target off-task, stopping:', nextText.slice(0, 80))
+          var cancel = document.querySelector(
+            '.ytp-autonav-endscreen-upcoming-cancel-button, .ytp-upnext-cancel-button, .ytp-autonav-endscreen-button-container button'
+          )
+          if (cancel) {
+            cancel.click()
+          }
+          try {
+            video.pause()
+          } catch (err) {}
+        }
+      }).catch(function () {})
+    }, true)
   }
 }
 

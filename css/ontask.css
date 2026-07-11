@@ -1,4 +1,5 @@
-/* OnTask chrome styles — pastel Dia-style. Design tokens shared by intake, focus bar, and later chrome work. */
+/* OnTask chrome — styled from ontask-pastel.html (the visual source of truth).
+   One rose accent used sparingly; warm cream page; left sidebar shell. */
 
 @font-face {
   font-family: 'Plus Jakarta Sans';
@@ -9,17 +10,28 @@
 }
 
 :root {
-  --ot-font: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --ot-ink: #3a3542;
-  --ot-ink-soft: #857e93;
-  --ot-card: rgba(255, 255, 255, 0.85);
-  --ot-accent: #6d5bd0;
-  --ot-accent-deep: #5a48bd;
-  --ot-accent-soft: #a594f9;
-  --ot-mint: #d9f2e6;
-  --ot-wash-base: #f7f4fb;
-  --ot-radius: 18px;
-  --ot-shadow-card: 0 18px 44px -18px rgba(109, 91, 208, 0.35);
+  --ot-accent: #e8799f;
+  --ot-accent-strong: #b84268;
+  --ot-accent-soft: #fbe8f0;
+  --ot-peach-soft: #fdebd6;
+  --ot-peach-ink: #9a6314;
+  --ot-lilac-soft: #ede6fa;
+  --ot-lilac-ink: #5e4c97;
+  --ot-mint-soft: #ddf1e5;
+  --ot-mint-ink: #2e7d57;
+  --ot-page: #fbf7f2;
+  --ot-canvas: #ffffff;
+  --ot-sidebar-bg: #f6efea;
+  --ot-ink: #332b33;
+  --ot-ink-soft: #847b85;
+  --ot-ink-faint: #b7aeb6;
+  --ot-line: #efe7e0;
+  --ot-line-soft: #f7f1eb;
+  --ot-r-lg: 22px;
+  --ot-r-md: 15px;
+  --ot-r-sm: 11px;
+  --ot-sidebar-w: 252px;
+  --ot-font: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
 }
 
 /* ---------- intake screen ---------- */
@@ -31,24 +43,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  text-align: center;
   font-family: var(--ot-font);
   color: var(--ot-ink);
-  background: radial-gradient(
-      1100px 700px at 12% -10%,
-      #e6defa 0%,
-      rgba(230, 222, 250, 0) 60%
-    ),
-    radial-gradient(
-      900px 620px at 105% 12%,
-      #fbe7da 0%,
-      rgba(251, 231, 218, 0) 55%
-    ),
-    radial-gradient(
-      1000px 800px at 50% 115%,
-      #dcefe9 0%,
-      rgba(220, 239, 233, 0) 60%
-    ),
-    var(--ot-wash-base);
+  background: var(--ot-page);
 }
 
 #ontask-intake[hidden] {
@@ -64,156 +62,126 @@
 }
 
 .ontask-intake-inner {
-  width: min(560px, calc(100vw - 96px));
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  /* optical centering: sit slightly above true center */
-  transform: translateY(-5vh);
+  align-items: center;
+  width: min(520px, calc(100vw - 96px));
 }
 
-.ontask-wordmark {
+.ontask-intro-mark {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  color: var(--ot-ink-soft);
-  margin-bottom: 28px;
+  gap: 9px;
+  margin-bottom: 40px;
 }
 
-.ontask-focus-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: radial-gradient(
-    circle at 30% 30%,
-    var(--ot-accent-soft),
-    var(--ot-accent)
-  );
-  animation: ontask-dot-breathe 2.8s ease-in-out infinite;
+.ontask-brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--ot-accent-soft);
+  display: grid;
+  place-items: center;
+  color: var(--ot-accent-strong);
+  font-size: 16px;
 }
 
-@keyframes ontask-dot-breathe {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(109, 91, 208, 0.35);
-  }
-  50% {
-    box-shadow: 0 0 0 7px rgba(109, 91, 208, 0);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .ontask-focus-dot {
-    animation: none;
-  }
+.ontask-brand-name {
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.02em;
 }
 
 .ontask-intake-question {
-  font-size: clamp(26px, 3.6vw, 34px);
-  font-weight: 600;
+  font-size: 30px;
+  font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.2;
-  margin: 0 0 26px 0;
+  max-width: 14ch;
+  margin: 0;
+}
+
+.ontask-intake-sub {
+  font-size: 14.5px;
+  color: var(--ot-ink-soft);
+  margin: 14px 0 0;
+  max-width: 42ch;
+  line-height: 1.55;
+  font-weight: 500;
 }
 
 #ontask-intake-form {
   display: flex;
-  align-items: center;
+  gap: 10px;
+  margin-top: 32px;
   width: 100%;
-  gap: 8px;
-  padding: 8px 8px 8px 20px;
-  background: var(--ot-card);
-  border: 1.5px solid rgba(109, 91, 208, 0.16);
-  border-radius: var(--ot-radius);
-  box-shadow: var(--ot-shadow-card);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-#ontask-intake-form:focus-within {
-  border-color: rgba(109, 91, 208, 0.55);
+  max-width: 460px;
 }
 
 #ontask-intake-input {
   flex: 1;
   min-width: 0;
-  border: none;
-  outline: none;
-  background: transparent;
+  background: var(--ot-canvas);
+  border: 1px solid var(--ot-line);
+  border-radius: 999px;
+  padding: 14px 20px;
   font-family: var(--ot-font);
-  font-size: 16px;
-  font-weight: 500;
+  font-size: 14.5px;
   color: var(--ot-ink);
-  padding: 12px 0;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 #ontask-intake-input::placeholder {
-  color: #b3adc2;
-  font-weight: 400;
+  color: var(--ot-ink-faint);
+}
+
+#ontask-intake-input:focus {
+  border-color: var(--ot-accent);
+  box-shadow: 0 0 0 4px var(--ot-accent-soft);
 }
 
 #ontask-intake-start {
-  border: none;
-  flex-shrink: 0;
-  font-family: var(--ot-font);
-  font-size: 15px;
-  font-weight: 600;
+  background: var(--ot-accent-strong);
   color: #fff;
-  background: var(--ot-accent);
-  padding: 12px 22px;
-  border-radius: calc(var(--ot-radius) - 6px);
+  border: none;
+  border-radius: 999px;
+  padding: 14px 22px;
+  font-family: var(--ot-font);
+  font-size: 14.5px;
+  font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease, transform 0.15s ease;
+  white-space: nowrap;
+  transition: transform 0.1s, filter 0.15s;
 }
 
 #ontask-intake-start:hover {
-  background: var(--ot-accent-deep);
+  filter: brightness(1.05);
 }
 
 #ontask-intake-start:active {
-  transform: scale(0.98);
-}
-
-#ontask-intake-start:focus-visible {
-  outline: 2px solid var(--ot-accent-deep);
-  outline-offset: 2px;
-}
-
-.ontask-intake-hint {
-  margin: 20px 0 0 4px;
-  font-size: 13.5px;
-  font-weight: 400;
-  color: var(--ot-ink-soft);
+  transform: scale(0.97);
 }
 
 #ontask-intake-resume {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 2px;
-  margin-top: 14px;
-  padding: 10px 16px;
+  margin-top: 18px;
+  padding: 10px 20px;
   max-width: 100%;
   font-family: var(--ot-font);
-  text-align: left;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1.5px solid rgba(109, 91, 208, 0.14);
-  border-radius: 14px;
+  background: var(--ot-canvas);
+  border: 1px solid var(--ot-line);
+  border-radius: var(--ot-r-md);
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 #ontask-intake-resume:hover {
-  background: rgba(255, 255, 255, 0.85);
-  border-color: rgba(109, 91, 208, 0.4);
-}
-
-#ontask-intake-resume:focus-visible {
-  outline: 2px solid var(--ot-accent-deep);
-  outline-offset: 2px;
+  border-color: var(--ot-accent);
+  box-shadow: 0 0 0 4px var(--ot-accent-soft);
 }
 
 #ontask-intake-resume[hidden] {
@@ -222,74 +190,376 @@
 
 .ontask-resume-eyebrow {
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--ot-ink-soft);
+  color: var(--ot-ink-faint);
 }
 
 #ontask-resume-task {
   font-size: 13.5px;
-  font-weight: 600;
-  color: var(--ot-ink);
+  font-weight: 700;
+  color: var(--ot-accent-strong);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
+  max-width: 46ch;
 }
 
-/* ---------- persistent focus bar ---------- */
-
-#ontask-focus-bar {
-  position: fixed;
-  top: 36px;
-  left: 0;
-  right: 0;
-  height: 46px;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 16px;
-  box-sizing: border-box;
-  font-family: var(--ot-font);
-  color: var(--ot-ink);
-  background: linear-gradient(90deg, #f0ebfb 0%, #faf1ea 60%, #eef5f1 100%);
-  border-bottom: 1px solid rgba(109, 91, 208, 0.14);
+#ontask-first-run {
+  margin-top: 26px;
+  padding: 14px 18px;
+  max-width: 460px;
+  background: var(--ot-lilac-soft);
+  border-radius: var(--ot-r-md);
+  text-align: left;
 }
 
-body.linux #ontask-focus-bar,
-body.windows #ontask-focus-bar {
-  top: 48px;
-}
-
-#ontask-focus-bar[hidden] {
+#ontask-first-run[hidden] {
   display: none;
 }
 
-.ontask-focus-text {
+#ontask-first-run p {
+  font-size: 12.5px;
+  color: var(--ot-lilac-ink);
+  line-height: 1.55;
+  font-weight: 500;
+  margin: 0 0 10px;
+}
+
+#ontask-first-run-ok {
+  background: var(--ot-canvas);
+  border: 1px solid var(--ot-line);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-family: var(--ot-font);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--ot-lilac-ink);
+  cursor: pointer;
+}
+
+/* ---------- app shell: left sidebar ---------- */
+
+body.ontask-shell {
+  background: var(--ot-page);
+}
+
+#ontask-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--ot-sidebar-w);
+  z-index: 20;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  background: var(--ot-sidebar-bg);
+  font-family: var(--ot-font);
+  color: var(--ot-ink);
+  padding: 14px 13px 13px;
+  padding-top: 40px; /* traffic lights */
+  box-sizing: border-box;
+}
+
+#ontask-sidebar[hidden] {
+  display: none;
+}
+
+#ontask-sidebar .ontask-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 6px 16px;
+}
+
+.ontask-focus-card {
+  background: var(--ot-canvas);
+  border: 1px solid var(--ot-line);
+  border-radius: var(--ot-r-md);
+  padding: 13px 15px 14px;
+  margin-bottom: 18px;
+}
+
+.ontask-focus-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ot-accent-strong);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 7px;
+}
+
+.ontask-focus-goal {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--ot-ink);
+  overflow-wrap: break-word;
+}
+
+.ontask-focus-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+  font-size: 12.5px;
+  color: var(--ot-ink-soft);
+  font-weight: 500;
   min-width: 0;
 }
 
-#ontask-focus-task {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  line-height: 1.25;
-  white-space: nowrap;
+.ontask-focus-sub span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-#ontask-focus-subtask {
-  font-size: 11.5px;
-  font-weight: 400;
+.ontask-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--ot-accent);
+  box-shadow: 0 0 0 0 var(--ot-accent);
+  animation: ontask-pulse 2.6s infinite;
+}
+
+@keyframes ontask-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(232, 121, 159, 0.5); }
+  70% { box-shadow: 0 0 0 7px rgba(232, 121, 159, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(232, 121, 159, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ontask-pulse { animation: none; }
+}
+
+.ontask-side-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ot-ink-faint);
+  padding: 0 8px 8px;
+}
+
+.ontask-allow-label {
+  padding-top: 14px;
+}
+
+#ontask-allowlist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.ontask-allow-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 8px 5px 11px;
+  border-radius: var(--ot-r-sm);
+  font-size: 12px;
+  font-weight: 500;
   color: var(--ot-ink-soft);
-  line-height: 1.3;
+}
+
+.ontask-allow-item:hover {
+  background: #efe7e0;
+}
+
+.ontask-allow-item button {
+  background: none;
+  border: none;
+  color: var(--ot-ink-faint);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--ot-font);
+  padding: 0 3px;
+}
+
+.ontask-allow-item button:hover {
+  color: var(--ot-accent-strong);
+}
+
+#ontask-allow-form {
+  padding: 4px 4px 0;
+}
+
+#ontask-allow-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--ot-canvas);
+  border: 1px solid var(--ot-line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-family: var(--ot-font);
+  font-size: 12px;
+  color: var(--ot-ink);
+  outline: none;
+}
+
+#ontask-allow-input:focus {
+  border-color: var(--ot-accent);
+}
+
+.ontask-side-foot {
+  margin-top: auto;
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ontask-timer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  font-size: 12px;
+  color: var(--ot-ink-soft);
+  font-weight: 600;
+}
+
+.ontask-timer b {
+  color: var(--ot-accent-strong);
+  font-weight: 700;
+}
+
+#ontask-end-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px;
+  border-radius: var(--ot-r-sm);
+  border: 1px solid var(--ot-line);
+  background: transparent;
+  color: var(--ot-ink-soft);
+  font-family: var(--ot-font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#ontask-end-btn:hover {
+  background: #efe7e0;
+}
+
+/* ---------- vertical tab rail (Min's tab strip, moved into the sidebar) ---------- */
+
+body.ontask-shell #ontask-tab-slot #tabs {
+  display: block;
+  height: auto;
+  margin: 0;
+}
+
+body.ontask-shell #ontask-tab-slot #tabs-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  height: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  max-height: 34vh;
+}
+
+body.ontask-shell #ontask-tab-slot .tab-item {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  padding: 9px 11px;
+  border-radius: var(--ot-r-sm);
+  font-family: var(--ot-font);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ot-ink-soft);
+  background: transparent;
+  opacity: 1;
+}
+
+body.ontask-shell #ontask-tab-slot .tab-item:hover {
+  background: #efe7e0;
+}
+
+body.ontask-shell #ontask-tab-slot .tab-item.active {
+  background: var(--ot-canvas);
+  color: var(--ot-accent-strong);
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 var(--ot-accent);
+}
+
+body.ontask-shell #ontask-tab-slot .tab-item .title {
+  color: inherit;
+}
+
+/* ---------- navbar retheme (top toolbar, offset past the sidebar) ---------- */
+
+body.ontask-shell #navbar {
+  left: var(--ot-sidebar-w);
+  width: auto;
+  right: 0;
+  background: var(--ot-page) !important;
+  color: var(--ot-ink) !important;
+  border-bottom: 1px solid var(--ot-line);
+  font-family: var(--ot-font);
+}
+
+body.ontask-shell #navbar .navbar-action-button {
+  color: var(--ot-ink-soft);
+}
+
+/* status badge: mint on-task / peach off-task */
+
+#ontask-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  margin-right: 6px;
+  border-radius: 999px;
+  font-family: var(--ot-font);
+  font-size: 12.5px;
+  font-weight: 700;
+  background: var(--ot-mint-soft);
+  color: var(--ot-mint-ink);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+}
+
+#ontask-status-badge[hidden] {
+  display: none;
+}
+
+#ontask-status-badge .ontask-sdot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ot-mint-ink);
+}
+
+#ontask-status-badge.off {
+  background: var(--ot-peach-soft);
+  color: var(--ot-peach-ink);
+}
+
+#ontask-status-badge.off .ontask-sdot {
+  background: var(--ot-peach-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ot-accent-strong);
+  outline-offset: 2px;
 }
