@@ -3,6 +3,8 @@
 var electron = require('electron')
 var ipc = electron.ipcRenderer
 
+console.log('ONTASK preload alive', location.href)
+
 var propertiesToClone = ['deltaX', 'deltaY', 'metaKey', 'ctrlKey', 'defaultPrevented', 'clientX', 'clientY']
 
 function cloneEvent (e) {
