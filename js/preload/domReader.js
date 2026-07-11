@@ -65,6 +65,10 @@ var ontaskDomReader = {
 
   run: function () {
     try {
+      // additive surface: inject on-task content on matching sites (idempotent)
+      if (ontaskBridge.statusCache && ontaskBridge.statusCache.enforcing) {
+        ontaskRunInjectors()
+      }
       var items = ontaskDomReader.collect()
       if (!items.length) {
         return 0
@@ -162,6 +166,7 @@ var ontaskDomReader = {
     // picks up async-rendered and infinite-scroll cards (incl. SPA navigations)
     ontaskDomReader.observe()
     ontaskDomReader.watchPrimary()
+    ontaskEnsureInjectorWatch()
     var adapter = ontaskActiveAdapter()
     if (adapter.init) {
       try {

@@ -165,6 +165,117 @@ var ontaskYouTubeAdapter = {
     } catch (err) {}
   },
 
+  /* ---------- Surface 3 (additive): inject on-task content ----------
+     Parsing helpers for real videos out of YouTube's search HTML; the
+     injector itself is registered at the bottom of the file via the shared
+     ontaskPanel framework (also used by Reddit and future sites). */
+
+  // parse real videos out of a YouTube search results HTML page
+  parseVideos: function (html) {
+    var data = ontaskYouTubeAdapter.extractYtInitialData(html)
+    if (!data) {
+      return []
+    }
+    var out = []
+    ontaskYouTubeAdapter.collectVideoRenderers(data, out)
+    return out.slice(0, 4).map(function (v) {
+      return { href: '/watch?v=' + v.id, title: v.title, channel: v.channel, thumb: v.thumb, badge: v.length }
+    })
+  },
+
+  extractYtInitialData: function (html) {
+    var marker = 'ytInitialData'
+    var from = 0
+    while (true) {
+      var idx = html.indexOf(marker, from)
+      if (idx === -1) {
+        return null
+      }
+      var braceStart = html.indexOf('{', idx)
+      if (braceStart === -1) {
+        return null
+      }
+      var between = html.slice(idx + marker.length, braceStart)
+      if (between.indexOf('=') !== -1 && between.length < 12) {
+        var json = ontaskYouTubeAdapter.scanBalanced(html, braceStart)
+        if (json) {
+          try {
+            return JSON.parse(json)
+          } catch (e) {}
+        }
+      }
+      from = idx + marker.length
+    }
+  },
+
+  scanBalanced: function (s, start) {
+    var depth = 0
+    var inStr = false
+    var esc = false
+    for (var i = start; i < s.length; i++) {
+      var c = s[i]
+      if (inStr) {
+        if (esc) {
+          esc = false
+        } else if (c === '\\') {
+          esc = true
+        } else if (c === '"') {
+          inStr = false
+        }
+      } else if (c === '"') {
+        inStr = true
+      } else if (c === '{') {
+        depth++
+      } else if (c === '}') {
+        depth--
+        if (depth === 0) {
+          return s.slice(start, i + 1)
+        }
+      }
+    }
+    return null
+  },
+
+  collectVideoRenderers: function (obj, out) {
+    if (!obj || typeof obj !== 'object' || out.length >= 12) {
+      return
+    }
+    if (Array.isArray(obj)) {
+      for (var i = 0; i < obj.length && out.length < 12; i++) {
+        ontaskYouTubeAdapter.collectVideoRenderers(obj[i], out)
+      }
+      return
+    }
+    if (obj.videoRenderer && obj.videoRenderer.videoId) {
+      var v = obj.videoRenderer
+      out.push({
+        id: v.videoId,
+        title: (v.title && (v.title.simpleText || (v.title.runs && v.title.runs[0] && v.title.runs[0].text))) || '',
+        channel: (v.ownerText && v.ownerText.runs && v.ownerText.runs[0] && v.ownerText.runs[0].text) ||
+          (v.longBylineText && v.longBylineText.runs && v.longBylineText.runs[0] && v.longBylineText.runs[0].text) || '',
+        thumb: (v.thumbnail && v.thumbnail.thumbnails && v.thumbnail.thumbnails.length)
+          ? v.thumbnail.thumbnails[v.thumbnail.thumbnails.length - 1].url : '',
+        length: (v.lengthText && v.lengthText.simpleText) || ''
+      })
+      return
+    }
+    for (var k in obj) {
+      ontaskYouTubeAdapter.collectVideoRenderers(obj[k], out)
+    }
+  },
+
+  // best-effort real videos from YouTube's own search HTML (same-origin)
+  fetchItems: function (query, done) {
+    fetch('https://www.youtube.com/results?search_query=' + encodeURIComponent(query), { credentials: 'same-origin' })
+      .then(function (r) { return r.text() })
+      .then(function (html) { done(ontaskYouTubeAdapter.parseVideos(html)) })
+      .catch(function (err) {
+        // fetch failed: the search chips remain as the robust fallback
+        console.log('ONTASK youtube injection fell back to chips:', err.message)
+        done([])
+      })
+  },
+
   /* Preflight before the video ends. Pending ambiguity remains blocked; a
      scoring outage resolves to show in the main process. */
   init: function () {
@@ -187,3 +298,16 @@ var ontaskYouTubeAdapter = {
 }
 
 ontaskRegisterAdapter(ontaskYouTubeAdapter)
+
+ontaskRegisterInjector({
+  name: 'youtube',
+  id: 'ontask-focus-panel',
+  match: function (loc) { return /(^|\.)youtube\.com$/.test(loc.hostname) },
+  shouldInject: function (loc) { return loc.pathname === '/' },
+  anchor: function () {
+    return document.querySelector('ytd-rich-grid-renderer') ||
+      document.querySelector('ytd-browse[page-subtype="home"] #primary #contents')
+  },
+  searchPath: function (term) { return '/results?search_query=' + encodeURIComponent(term) },
+  fetchItems: ontaskYouTubeAdapter.fetchItems
+})

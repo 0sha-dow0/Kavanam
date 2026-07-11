@@ -227,6 +227,32 @@ ipc.on('ontask-first-run-done', function (e) {
   ontaskPersistence.save()
 })
 
+/* on-task suggestions for content injection (Surface 3, additive): the
+   task-relevant search terms Groq already produced. Content pages read
+   these to offer on-task alternatives in place of a distracting feed. */
+ipc.handle('ontask-suggestions', function (e) {
+  ontaskIPC.requireContent(e)
+  var session = focusSession.get()
+  if (!session) {
+    return null
+  }
+  var terms = []
+  var seen = {}
+  ;(session.subtasks || []).concat(session.keywords || []).forEach(function (t) {
+    var clean = String(t || '').replace(/\s+/g, ' ').trim()
+    var key = clean.toLowerCase()
+    if (clean && clean.length <= 60 && !seen[key]) {
+      seen[key] = true
+      terms.push(clean)
+    }
+  })
+  return {
+    task: session.task,
+    intent: session.expandedIntent || '',
+    terms: terms.slice(0, 8)
+  }
+})
+
 if (process.argv.includes('--ontask-selftest')) {
   focusSession.start('selftest dummy task')
   console.log('ONTASK selftest read-back:', JSON.stringify(focusSession.publicState()))

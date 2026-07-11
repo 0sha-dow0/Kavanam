@@ -74,6 +74,12 @@ var ontaskBridge = {
     try {
       ipc.send('ontask-primary-check', { url: ontaskBridge.currentURL(), text: text })
     } catch (e) {}
+  },
+
+  getSuggestions: function (callback) {
+    ipc.invoke('ontask-suggestions').then(callback).catch(function () {
+      callback(null)
+    })
   }
 }
 
@@ -86,10 +92,13 @@ ipc.on('ontask-verdicts', function (e, payload) {
 ipc.on('ontask-clear', function () {
   ontaskBridge.statusCache = null
   ontaskSurfaceApplier.clearAll()
+  ontaskClearInjectors()
 })
 
 ipc.on('ontask-rescore', function () {
   ontaskBridge.statusCache = null
   ontaskDomReader.seenIds = {}
+  // task changed: drop injected panels + cached items so they refresh
+  ontaskClearInjectors()
   ontaskDomReader.scheduleRun()
 })
