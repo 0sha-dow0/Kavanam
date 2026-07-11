@@ -60,7 +60,7 @@ test('ambiguous navigation waits for and applies the Groq verdict', async () => 
   context.ontaskGroqClient.tiebreak = async () => 'off'
   const decision = await guard.resolve('https://example.com/possibly-related-topic', 'https://school.edu/')
   assert.equal(decision.allow, false)
-  assert.equal(decision.reason, 'tiebreak off-task')
+  assert.equal(decision.reason, 'tiebreak scored off-task')
 })
 
 test('navigation scoring outages fail open', async () => {

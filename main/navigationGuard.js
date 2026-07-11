@@ -87,9 +87,14 @@ const ontaskNavigationGuard = {
     if (g.authFlowActive(wc)) {
       return { allow: true, reason: 'auth-chain' }
     }
-    // search engines are working tools, never walls
+    // search engines are working tools — but the QUERY is judged, so the
+    // results page can't become an off-task reading surface
     if (g.SEARCH_HOSTS.some(function (h) { return g.hostMatches(target.hostname, h) })) {
-      return { allow: true, reason: 'search' }
+      var query = g.searchQueryOf(target)
+      if (!query || query.length < 6) {
+        return { allow: true, reason: 'search' }
+      }
+      return { allow: false, defer: true, reason: 'search-query' }
     }
     // same-site movement is handled by the content surfaces, not nav blocking (Q21)
     try {
@@ -121,31 +126,81 @@ const ontaskNavigationGuard = {
     return raw.replace(/[-+_/?=&.,%]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
   },
 
+  searchQueryOf: function (target) {
+    var params = ['q', 'query', 'search_query', 'p', 's', 'k']
+    for (var i = 0; i < params.length; i++) {
+      var value = target.searchParams.get(params[i])
+      if (value && value.trim()) {
+        return value.replace(/[+]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
+      }
+    }
+    return null
+  },
+
+  // URL machinery and words that merely repeat the domain carry no task
+  // signal ("youtube com youtube" from a typed 'youtube' is NOT content)
+  URL_STOPWORDS: ['www', 'com', 'net', 'org', 'html', 'htm', 'php', 'asp', 'aspx',
+    'index', 'search', 'results', 'query', 'page', 'pages', 'watch', 'item',
+    'view', 'video', 'videos', 'web', 'app', 'home', 'ref', 'utm'],
+
+  urlSignalWords: function (target) {
+    var hostLabels = {}
+    target.hostname.toLowerCase().split('.').forEach(function (label) {
+      hostLabels[label] = true
+    })
+    var seen = {}
+    return ontaskNavigationGuard.urlText(target).split(' ').filter(function (word) {
+      if (word.length < 3 || seen[word] || hostLabels[word] ||
+          ontaskNavigationGuard.URL_STOPWORDS.indexOf(word) !== -1) {
+        return false
+      }
+      seen[word] = true
+      return true
+    })
+  },
+
   // async second stage for deferred decisions: block ONLY when the
   // destination text is scoreable and clearly off-task; opaque URLs pass
   // and are caught by the primary-content check after load (Q15)
   scoreURL: async function (url) {
+    var g = ontaskNavigationGuard
     var target
     try {
       target = new URL(url)
     } catch (e) {
       return { allow: true, reason: 'unparseable' }
     }
-    var text = ontaskNavigationGuard.urlText(target)
-    // a bare domain or near-empty path carries no task signal: judging
-    // "youtube com" against the task would wall off the open web. Let it
-    // load; the primary-content check judges the actual page (Q15).
-    var meaningfulWords = text.split(' ').filter(function (w) { return w.length > 2 })
-    if (!text || (target.pathname === '/' && !target.search) || meaningfulWords.length < 3) {
-      return { allow: true, reason: 'unscoreable-url' }
+
+    // search engines: the QUERY is the intent — judge it directly
+    var isSearchHost = g.SEARCH_HOSTS.some(function (h) { return g.hostMatches(target.hostname, h) })
+    var text
+    var offReason
+    if (isSearchHost) {
+      var query = g.searchQueryOf(target)
+      if (!query || query.length < 6) {
+        return { allow: true, reason: 'search' }
+      }
+      text = query
+      offReason = 'off-task search'
+    } else {
+      // a bare domain, repeated-domain path, or URL machinery carries no
+      // task signal ("youtube com youtube" from a typed 'youtube'): let it
+      // load; the primary-content check judges the actual page (Q15).
+      var words = g.urlSignalWords(target)
+      if (words.length < 2) {
+        return { allow: true, reason: 'unscoreable-url' }
+      }
+      text = words.join(' ')
+      offReason = 'scored off-task'
     }
-    var score = await ontaskRelevanceEngine.scoreText(meaningfulWords.join(' '), { taskOnly: true })
+
+    var score = await ontaskRelevanceEngine.scoreText(text, { taskOnly: true })
     var band = ontaskRelevanceEngine.band(score)
     if (band === null) {
       return { allow: true, reason: 'scoring-outage' }
     }
     if (band === 'off') {
-      return { allow: false, reason: 'scored off-task' }
+      return { allow: false, reason: offReason }
     }
     if (band === 'ambiguous') {
       if (!ontaskGroqClient.available()) {
@@ -155,7 +210,7 @@ const ontaskNavigationGuard = {
       var verdict = await ontaskGroqClient.tiebreak(session.task, session.expandedIntent, text)
       return verdict === 'on'
         ? { allow: true, reason: 'tiebreak on-task' }
-        : { allow: false, reason: 'tiebreak off-task' }
+        : { allow: false, reason: 'tiebreak ' + offReason }
     }
     return { allow: true, reason: 'scored on-task' }
   },
